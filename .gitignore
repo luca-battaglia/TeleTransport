@@ -1,0 +1,27 @@
+# Ambienti virtuali
+.venv/
+venv/
+env/
+
+# Chiavi e configurazioni locali
+.env
+.env.local
+*.toml
+!travel_ranker.toml
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDEs e tool
+.vscode/
+.idea/
+*.swp
+
+# Log
+*.log
+log.json
+# OS specific
+.DS_Store
+Thumbs.db

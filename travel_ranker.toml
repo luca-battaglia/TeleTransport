@@ -1,0 +1,110 @@
+# travel_ranker.toml
+# Config unico per:
+# - treni.py (LeFrecce / lefrecce.it BFF)
+# - voli.py  (Google Flights via SerpApi)
+#
+# Ordine di precedenza:
+#   CLI  >  TOML  >  default hardcoded
+#
+# Ricerca automatica del file (se NON passi --config):
+# - ./travel_ranker.toml
+# - ~/.config/travel_ranker.toml
+# - oppure variabile ambiente: TRAVEL_RANKER_CONFIG=/percorso/al/file.toml
+
+
+# =============================================================================
+# TRENI (treni.py)
+# =============================================================================
+[treni]
+# Filtri / limiti
+min_price = 32.0          # €: scarta soluzioni SALEABLE con prezzo base < min_price
+max_per_day = 120         # max righe "accettate" per giorno e per tratta (dopo filtri/scoring)
+page_size = 40            # paginazione endpoint: limit/offset (più alto = meno chiamate)
+limit = 50                # quante righe stampare in tabella (top-N dopo sorting)
+
+# Solo per wizard interattivo (quando lanci treni.py senza argomenti CLI)
+wizard_min_price = 5.0   # €: min_price usato in wizard
+
+# Robustezza rete/polling (non cambia le feature, solo retry/anti-loop)
+poll_empty_retries = 6    # quante volte riprovare se una pagina torna vuota
+poll_dup_retries = 4      # quante volte riprovare se una pagina contiene solo duplicati
+poll_sleep_base = 0.6     # secondi: base per backoff con jitter (aumenta con i tentativi)
+scan_cap_mult = 25        # scan_cap = max(300, max_per_day * scan_cap_mult)
+api_timeout_ms = 45000    # ms: timeout per singola chiamata API
+api_retries = 6           # retry per status temporanei (429/5xx/timeout ecc.)
+
+# Scoring (ranking): ordina per adjusted_cost, poi durata, poi orario partenza.
+# adjusted_cost = prezzo_base
+#               + (durata_ore * time_value_eur_per_hour)
+#               + penalità_partenza_presto
+#               + penalità_arrivo_tardi
+#               + (cambi * change_penalty_eur)
+[treni.scoring]
+time_value_eur_per_hour = 20.0            # €/h: quanto “vale” un’ora di viaggio (più alto => preferisci più breve)
+early_departure_ref_hour = 9              # ora: se parti prima di quest’ora, scatta penalità proporzionale
+early_departure_penalty_eur_per_hour = 20.0
+
+late_arrival_start_hour = 22              # ora: se arrivi dopo, scatta penalità proporzionale
+overnight_end_hour = 5                    # ora: arrivi tra 00:00 e questa ora -> penalità continua oltre mezzanotte
+late_arrival_penalty_eur_per_hour = 15.0
+
+change_penalty_eur = 5.0                  # € per cambio (cambi = numero_tratte - 1)
+
+
+# =============================================================================
+# VOLI (voli.py) - Google Flights via SerpApi
+# =============================================================================
+[voli]
+# Parametri query SerpApi / Google Flights
+currency = "EUR"      # valuta
+hl = "it"             # language (hl)
+gl = "it"             # geo (gl)
+
+# Opzioni SerpApi
+deep_search = true    # più completa (più lenta / più chiamate), spesso più risultati
+show_hidden = true    # include voli "hidden"
+no_cache = false      # true = forza refresh, ignora cache
+
+# Output
+dedup = true          # true = rimuove righe identiche (stessi orari/durata/prezzo)
+
+# Filtri / limiti
+min_price = 3         # €: scarta voli con prezzo < min_price (utile contro parsing/risultati anomali)
+top_outbounds = 10    # A/R: per ogni coppia di date, prendi fino a N andate candidate
+top_returns = 20      # A/R: per ogni outbound scelto, prendi fino a N ritorni
+top_flights = 80      # solo andata: per ogni giorno, prendi fino a N voli (best_flights + other_flights)
+limit = 50            # quante righe stampare in tabella
+
+# Scoring (ranking)
+# One-way:
+# adjusted_cost = prezzo
+#               + (durata_ore * time_value_eur_per_hour)
+#               + penalità_partenza_presto
+#               + penalità_arrivo_tardi
+#               + (connessioni * connection_penalty_eur)
+#
+# Round-trip (NOTA: nel codice il "prezzo" usato è quello del ritorno, com'era nell'originale):
+# adjusted_cost = prezzo_ritorno
+#               + value_time(durata_andata + durata_ritorno)
+#               + early(andata) + early(ritorno)
+#               + late(andata)  + late(ritorno)
+#               + penalty_connessioni(andata+ritorno)
+#
+# EXTRA Brindisi (BDS):
+# per ogni "uso aeroporto" BDS aggiunge:
+#   +30€ benzina
+#   +1.5h * time_value_eur_per_hour
+#   +3h   * parents_time_value_eur_per_hour
+# Applicazione:
+#   one-way: 1x
+#   round-trip: 2x
+[voli.scoring]
+time_value_eur_per_hour = 20.0
+early_departure_ref_hour = 9
+early_departure_penalty_eur_per_hour = 20.0
+late_arrival_start_hour = 22
+late_arrival_penalty_eur_per_hour = 15.0
+connection_penalty_eur = 5.0
+
+# NEW: valore del tempo dei genitori (€/h)
+parents_time_value_eur_per_hour = 8.0
