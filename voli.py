@@ -1070,6 +1070,9 @@ def _preparse_config(argv: List[str]) -> Tuple[Optional[str], bool]:
 
 
 def main() -> int:
+    eprint("*" * 65)
+    eprint("* !!! RICORDATI DI USARE IL BONUS DI 15€ SU BOOKING.COM !!! *")
+    eprint("*" * 65)
     argv = sys.argv[1:]
     cfg_path, _ = _preparse_config(argv)
 
