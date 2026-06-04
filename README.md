@@ -1,123 +1,73 @@
 # TeleTransport 🚄✈️
+*Time is money*
 
-TeleTransport (also known as Travel Ranker) is a powerful, highly configurable CLI tool suite designed to search, rank, and compare travel solutions for both trains and flights. 
+TeleTransport (also known as Travel Ranker) is a powerful, highly configurable suite designed to search, rank, and compare travel solutions for both trains and flights. 
 
-Instead of just sorting by the lowest base price, TeleTransport uses a **smart scoring system** that evaluates the *actual* cost of a trip by factoring in travel time, early departure penalties, late arrival penalties, and connection inconveniences.
+Instead of just sorting by the lowest base price, TeleTransport uses a **smart scoring system** that evaluates the *actual* cost of a trip by factoring in travel time, early departure penalties, late arrival penalties, connection inconveniences, and extra airport costs.
 
-## Features
+## 🌟 What's New
+We have completely overhauled TeleTransport! Moving from a simple CLI tool, TeleTransport now features a **beautiful, fully responsive Next.js frontend GUI** with deep customization options, local persistence, and extensive deployment capabilities.
 
-- **🚂 `treni`**: Scrapes and ranks Trenitalia (LeFrecce BFF API) train solutions using Playwright.
-- **✈️ `voli`**: Fetches and ranks flight solutions using Google Flights via SerpApi.
-- **📊 Smart Scoring**: Automatically ranks solutions by an `adjusted_cost` considering your personal value of time (€/h) and schedule preferences.
-- **🛠️ Highly Configurable**: Tweak all scoring parameters, limits, and API settings globally via a plain `travel_ranker.toml` file.
-- **🧙‍♂️ Interactive Wizard**: Run the tools without arguments for a step-by-step guided prompt, or use fast CLI positional arguments.
-- **📅 Flexible Dates**: Support for exact dates (e.g., `10/05`) or date ranges (e.g., `10-12/05`) to find the best option across multiple days.
+### 🔥 Immense New Features
+- **Stunning Next.js GUI**: A brand new, beautifully designed frontend built with React and Next.js, featuring smooth animations (Framer Motion), dark/light mode toggle, and a sleek glassmorphism aesthetic.
+- **Advanced State Persistence**: Search results, UI settings, active tabs, and input data are persisted in `localStorage` and `sessionStorage`. If you accidentally reload, your data is safe!
+- **Extensive UI Customization**: Manage all your default origins, destinations, and dropdown options directly from a unified Settings menu inside the app.
+- **Granular Airport Extra Costs**: Traveling to the airport takes time and fuel. Now you can assign specific fuel costs and driving times (for you and your companions) to specific IATA codes. The app will factor these into the final `adjusted_cost`.
+- **Text Reminders**: Add custom alerts (e.g., "Don't forget the Booking.com discount!") that display prominently when searching for flights or trains.
+- **Internationalization (i18n)**: Fully bilingual support (English and Italian) with a comprehensive integrated guide on how scoring works.
+- **Markdown Export**: Found the perfect solutions? Click "Copy Table" to instantly copy the results formatted as Markdown, ready to be pasted into your notes or chats.
+- **Keyboard Shortcuts**: Power user? Use `Alt+1` for Trains, `Alt+2` for Flights, `Ctrl+Enter` to search, and `Escape` to close modals.
+
 
 ---
 
-## Installation & Setup
+## ⚙️ How Scoring Works (The "Adjusted Cost")
+
+The core philosophy of TeleTransport is that **Time is Money**. The system ranks solutions based on the lowest `adjusted_cost`:
+
+```text
+Adjusted Cost = Ticket Price
+              + (Duration Hours * Time Value)
+              + (Companions Duration Hours * Companions Time Value)
+              + Early Departure Penalty
+              + Late Arrival Penalty (including Overnights)
+              + (Connections * Connection Penalty)
+              + Airport Specific Extra Costs (Fuel + Drive Time)
+```
+
+You can customize *every single variable* directly from the Settings page in the web app, allowing you to tailor the algorithm exactly to your travel style and budget.
+
+---
+
+## 💻 Installation & Local Setup
 
 ### 1. Requirements
 - **Python 3.9+**
+- **Node.js 18+**
 - **SerpApi API Key** (Required for Flights)
 
-### 2. Environment Setup
-Clone or place the source code in your desired directory (e.g., `C:\TeleTransport`).
-
-Set up a virtual environment and install dependencies:
+### 2. Backend Setup
 ```powershell
-cd C:\TeleTransport
+cd C:\TeleTransport\backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 playwright install
 ```
+*(Make sure you have an `.env` file with your `SERPAPI_KEY` as explained in the legacy CLI setup).*
 
-### 3. Make it Portable (Windows)
-To use the `voli` and `treni` commands natively from any directory:
-1. Open your Windows **Environment Variables**.
-2. Add `C:\TeleTransport` to your `Path` variable.
-3. *(Optional)* Add a new System/User variable named `SERPAPI_KEY` and paste your SerpApi key. Although using the `.env` file (step below) is the recommended approach.
-
-Now, thanks to the included `.bat` files, you can simply type `voli` or `treni` in any PowerShell or Command Prompt window.
-
-### 4. Secrets Management (API Keys)
-To manage sensitive data safely (like `SERPAPI_KEY`), simply duplicate the `.env.example` file and rename it to `.env`:
+### 3. Frontend Setup
 ```powershell
-copy .env.example .env
+cd C:\TeleTransport\frontend
+npm install
+npm run dev
 ```
-Open `.env` and paste your actual SerpApi key inside `SERPAPI_KEY=...`. The system will automatically pick it up without you needing to modify global Windows variables.
+The app will be available at `http://localhost:3000`.
+
+### 4. Legacy CLI Tools
+The classic CLI tools (`voli.bat` and `treni.bat`) and the `travel_ranker.toml` configurations are still fully functional if you prefer the terminal!
 
 ---
 
-## Usage
-
-You can use the commands interactively or by passing positional arguments.
-
-### Interactive Wizard
-If you don't remember the syntax, simply run the tool without arguments:
-```powershell
-voli
-# or
-treni
-```
-An interactive menu will guide you through selecting the route, departure, and return dates.
-
-### CLI Positional Arguments
-The tools accept fast positional arguments. The standard order is:
-1. **Route** (e.g., `zrh-bri`, explicit keys, or `--from`/`--to`)
-2. **Departure Date / Range** 
-3. **Return Date / Range** *(Optional for Round-Trip)*
-
-#### Date Formats
-- Exact Date: `10/05` (May 10th)
-- Date Range: `10-12/05` (May 10th to May 12th)
-
-#### Examples (`voli`)
-- **Round trip with date ranges:**
-  ```powershell
-  voli zrh-bri 10-12/05 15-16/05
-  ```
-- **Exact round trip:**
-  ```powershell
-  voli zrh-bri 10/05 15/05
-  ```
-- **One-way with date range:**
-  ```powershell
-  voli zrh-bri 10-12/05
-  ```
-- **Using custom IATA codes instead of route presets:**
-  ```powershell
-  voli --from LIN --to LHR 10/05 15/05
-  ```
-
-*(The `treni` command works similarly for supported train station presets like `torino-zurigo`, `ale-zrh`, etc.)*
-
----
-
-## Configuration (`travel_ranker.toml`)
-
-The internal ranking algorithm can be drastically customized. The system looks for `travel_ranker.toml` in your current directory, or in `~/.config/travel_ranker.toml`, or via the `TRAVEL_RANKER_CONFIG` environment variable.
-
-### Scoring Logic Overview
-The tools rank solutions based on the lowest `adjusted_cost`, defined as:
-```text
-adjusted_cost = base_price
-              + (duration_hours * time_value_eur_per_hour)
-              + early_departure_penalty
-              + late_arrival_penalty
-              + (connections * change_penalty_eur)
-```
-
-In the TOML file, you can adjust:
-- **`time_value_eur_per_hour`**: How much you value your time (default: 20€/h).
-- **`early_departure_ref_hour`**: Hour before which a penalty is applied (default: 09:00).
-- **`late_arrival_start_hour`**: Hour after which a penalty is applied (default: 22:00).
-- **`change_penalty_eur`**: Fixed penalty per connection (default: 5€).
-
-*See `travel_ranker.toml` in the repository for all available configuration options regarding API behaviors, caching, deep search flags, and pagination.*
-
----
-
-## Future Improvements / Roadmap
+## 🔮 Future Improvements / Roadmap
 - [ ] Incorporate **Italo Treno** support (specifically for routes like Milan-Turin).

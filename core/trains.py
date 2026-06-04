@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# treni.py
+# trains.py
 # Trenitalia (LeFrecce) travel solutions ranker con Playwright.
 #
 # Update: parametri configurabili via TOML unico (es. travel_ranker.toml).
@@ -37,7 +37,7 @@ LOC_SEARCH_URL = f"{BFF_BASE}/website/locations/search"
 
 # Preset stazioni (focus solo: Zurigo/Torino/Alessandria)
 ZURIGO = "Zurigo HB"
-TORINO = "Torino ( Tutte Le Stazioni )"
+TORINO = "Torino ( All Stations )"
 ALESSANDRIA = "Alessandria"
 
 ROUTES_PRESET: Dict[str, Tuple[str, str]] = {
@@ -138,7 +138,7 @@ def load_config_dict(config_path: Optional[str], *, verbose: bool) -> Dict[str, 
     if config_path:
         p = Path(config_path).expanduser()
         if not p.exists():
-            raise FileNotFoundError(f"Config non trovato: {p}")
+            raise FileNotFoundError(f"Config not found: {p}")
         return _load_toml_file(p)
 
     for p in _default_config_paths():
@@ -147,7 +147,7 @@ def load_config_dict(config_path: Optional[str], *, verbose: bool) -> Dict[str, 
                 return _load_toml_file(p)
         except Exception as e:
             if verbose:
-                eprint(f"[WARN] Errore lettura config {p}: {e}")
+                eprint(f"[WARN] Error reading config {p}: {e}")
             continue
     return {}
 
@@ -164,7 +164,7 @@ class TrainScoringConfig:
 
 
 @dataclass(frozen=True)
-class TreniDefaultsConfig:
+class TrainsDefaultsConfig:
     min_price: float = 20.0
     max_per_day: int = 120
     page_size: int = 40
@@ -180,14 +180,14 @@ class TreniDefaultsConfig:
     api_retries: int = 6
 
 
-def parse_treni_config(cfg: Dict[str, Any]) -> Tuple[TreniDefaultsConfig, TrainScoringConfig]:
-    treni = _deep_get(cfg, ["treni"])
+def parse_trains_config(cfg: Dict[str, Any]) -> Tuple[TrainsDefaultsConfig, TrainScoringConfig]:
+    treni = _deep_get(cfg, ["trains"])
     treni = treni if isinstance(treni, dict) else {}
 
-    scoring = _deep_get(cfg, ["treni", "scoring"])
+    scoring = _deep_get(cfg, ["trains", "scoring"])
     scoring = scoring if isinstance(scoring, dict) else {}
 
-    dflt = TreniDefaultsConfig(
+    dflt = TrainsDefaultsConfig(
         min_price=_as_float(treni.get("min_price")) or 20.0,
         max_per_day=_as_int(treni.get("max_per_day")) or 120,
         page_size=_as_int(treni.get("page_size")) or 40,
@@ -234,7 +234,7 @@ def _infer_year_if_missing(month: int, day: int) -> int:
 def parse_date_human(s: str) -> date:
     s = (s or "").strip()
     if not s:
-        raise ValueError("data vuota")
+        raise ValueError("empty date")
 
     try:
         return date.fromisoformat(s)
@@ -254,13 +254,13 @@ def parse_date_human(s: str) -> date:
             yy = (2000 + yy_i) if yy_i < 100 else yy_i
         return date(yy, mm, dd)
 
-    raise ValueError(f"data non valida: {s!r}")
+    raise ValueError(f"invalid date: {s!r}")
 
 
 def parse_date_range_human(s: str) -> Tuple[date, date]:
     s = (s or "").strip()
     if not s:
-        raise ValueError("range vuoto")
+        raise ValueError("empty range")
 
     # ISO range: 2026-02-11..2026-02-13
     if ".." in s:
@@ -292,12 +292,12 @@ def parse_date_range_human(s: str) -> Tuple[date, date]:
 def parse_two_ranges_human(s: str, *, reverse: bool) -> Tuple[Tuple[date, date], Optional[Tuple[date, date]]]:
     s = (s or "").strip()
     if not s:
-        raise ValueError("range vuoto")
+        raise ValueError("empty range")
 
     parts = s.split()
     if not reverse:
         if len(parts) != 1:
-            raise ValueError(f"range non valido: {s!r} (atteso un solo range)")
+            raise ValueError(f"invalid range: {s!r} (expected a single range)")
         return parse_date_range_human(parts[0]), None
 
     if len(parts) == 1:
@@ -306,7 +306,7 @@ def parse_two_ranges_human(s: str, *, reverse: bool) -> Tuple[Tuple[date, date],
     if len(parts) == 2:
         return parse_date_range_human(parts[0]), parse_date_range_human(parts[1])
 
-    raise ValueError(f"range non valido: {s!r} (attesi 1 o 2 range)")
+    raise ValueError(f"invalid range: {s!r} (expected 1 or 2 ranges)")
 
 
 def daterange(d1: date, d2: date) -> Iterable[date]:
@@ -323,7 +323,7 @@ def daterange(d1: date, d2: date) -> Iterable[date]:
 def parse_iso_dt(s: str) -> datetime:
     s = (s or "").strip()
     if not s:
-        raise ValueError("datetime vuoto")
+        raise ValueError("empty datetime")
     # compat: "...Z"
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
@@ -586,7 +586,7 @@ def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
         if n == nq or dn == nq:
             return int(loc["id"])
 
-    # Euristiche Zurigo
+    # Heuristics Zurigo
     if any(k in nq for k in ("zur", "zuri", "zurigo", "zür", "zuer")):
         for loc in locations:
             n = str(loc.get("name", "")).casefold()
@@ -594,7 +594,7 @@ def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
             if any(k in n or k in dn for k in ("hb", "hauptbahnhof", "centrale")):
                 return int(loc["id"])
 
-    # Euristiche Torino (Tutte le stazioni)
+    # Heuristics Torino (Tutte le stazioni)
     if "torino" in nq:
         for loc in locations:
             n = str(loc.get("name", "")).casefold()
@@ -603,7 +603,7 @@ def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
                 return int(loc["id"])
 
     if not locations:
-        raise RuntimeError(f"Nessuna stazione trovata per: {name_query}")
+        raise RuntimeError(f"No station found for: {name_query}")
     return int(locations[0]["id"])
 
 
@@ -625,7 +625,7 @@ def _late_arrival_penalty(arr_local: datetime, scoring: TrainScoringConfig) -> f
         return max(0.0, hours) * float(scoring.late_arrival_penalty_eur_per_hour)
 
     if arr_t < overnight_end:
-        # arrivo dopo mezzanotte -> conta rispetto alle 22:00 di ieri (o configurato)
+        # arrival after midnight -> counts relative to 22:00 yesterday (or configured)
         ref = datetime.combine(arr_local.date() - timedelta(days=1), late_start, TZ)
         hours = (arr_local - ref).total_seconds() / 3600.0
         return max(0.0, hours) * float(scoring.late_arrival_penalty_eur_per_hour)
@@ -670,21 +670,21 @@ def compute_solution_metrics(
     if duration.total_seconds() <= 0:
         return None
 
-    # Valore tempo viaggio (€/h)
+    # Travel time value (€/h)
     travel_hours = duration.total_seconds() / 3600.0
     time_value = travel_hours * float(scoring.time_value_eur_per_hour)
 
-    # Penalità partenza presto (prima dell'ora ref) (€/h)
+    # Early departure penalty (prima dell'ora ref) (€/h)
     ref_hour = int(scoring.early_departure_ref_hour)
     ref_dt = datetime.combine(dep_local.date(), time(ref_hour, 0), TZ)
     early_pen = 0.0
     if dep_local < ref_dt:
         early_pen = ((ref_dt - dep_local).total_seconds() / 3600.0) * float(scoring.early_departure_penalty_eur_per_hour)
 
-    # Penalità arrivo tardi
+    # Late arrival penalty
     late_pen = _late_arrival_penalty(arr_local, scoring)
 
-    # Penalità cambi (€/cambio)
+    # Changes penalty (€/cambio)
     nodes = sol.get("nodes") or []
     try:
         changes = max(0, int(len(nodes)) - 1)
@@ -767,12 +767,12 @@ async def search_ranked_solutions(
 
         # Cookie/init: se fallisce, continuiamo comunque (test ha mostrato che spesso funziona comunque).
         if verbose:
-            eprint("[INIT] Caricamento homepage per cookie...")
+            eprint("[INIT] Loading homepage for cookie...")
         try:
             await page.goto("https://www.lefrecce.it/Channels.Website.WEB/", wait_until="domcontentloaded", timeout=60_000)
         except Exception as e:
             if verbose:
-                eprint(f"[WARN] Caricamento homepage fallito ({e}), proseguo.")
+                eprint(f"[WARN] Loading homepage failed ({e}), continuing.")
 
         request_ctx = context.request
 
@@ -1019,7 +1019,7 @@ def interactive_wizard() -> Tuple[List[SearchTask], bool]:
         a, b = menu[choice - 1][1]  # type: ignore[misc]
         base_route = Route(a, b)
     else:
-        a = _ask("From (es 'Torino ( Tutte Le Stazioni )'): ").strip()
+        a = _ask("From (es 'Torino ( All Stations )'): ").strip()
         b = _ask("To   (es 'Zurigo HB'): ").strip()
         if not a or not b:
             raise ValueError("stazioni non valide")
@@ -1047,182 +1047,3 @@ def interactive_wizard() -> Tuple[List[SearchTask], bool]:
     return tasks, False
 
 
-# ---------------- CLI ----------------
-
-def build_tasks_from_args(args: argparse.Namespace) -> List[SearchTask]:
-    route_key = (args.route or "").strip().lower()
-
-    if route_key in ROUTES_PRESET:
-        a, b = ROUTES_PRESET[route_key]
-        base_route = Route(a, b)
-    elif args.from_station and args.to_station:
-        base_route = Route(args.from_station, args.to_station)
-    else:
-        raise ValueError("Manca la tratta: usa un preset (route) oppure --from/--to")
-
-    pos_dep = args.dep
-    pos_ret = args.ret
-
-    out_range: Optional[Tuple[date, date]] = None
-    back_range: Optional[Tuple[date, date]] = None
-
-    if pos_dep:
-        out_range = parse_date_range_human(pos_dep)
-    elif getattr(args, "dep_start", None) and getattr(args, "dep_end", None):
-        out_range = (date.fromisoformat(args.dep_start), date.fromisoformat(args.dep_end))
-    else:
-        raise ValueError("Manca la data/range andata: usa <dep> oppure --dep-start/--dep-end")
-
-    one_way: bool = getattr(args, "one_way", False)
-
-    if (not one_way) and pos_ret:
-        back_range = parse_date_range_human(pos_ret)
-    elif (not one_way) and getattr(args, "ret_start", None) and getattr(args, "ret_end", None):
-        back_range = (date.fromisoformat(args.ret_start), date.fromisoformat(args.ret_end))
-    else:
-        one_way = True
-
-    tasks: List[SearchTask] = [SearchTask(route=base_route, d1=out_range[0], d2=out_range[1])]
-    if (not one_way) and back_range:
-        tasks.append(SearchTask(route=Route(base_route.to_name, base_route.from_name), d1=back_range[0], d2=back_range[1]))
-
-    return tasks
-
-
-def _preparse_config_and_verbose(argv: Optional[Sequence[str]]) -> Tuple[Optional[str], bool]:
-    p = argparse.ArgumentParser(add_help=False)
-    p.add_argument("--config", type=str, default=None)
-    p.add_argument("--verbose", action="store_true")
-    ns, _ = p.parse_known_args(list(argv) if argv is not None else sys.argv[1:])
-    return ns.config, bool(ns.verbose)
-
-
-async def amain(argv: Optional[Sequence[str]] = None) -> int:
-    cfg_path, pre_verbose = _preparse_config_and_verbose(argv)
-
-    try:
-        cfg_dict = load_config_dict(cfg_path, verbose=pre_verbose)
-    except Exception as e:
-        eprint(f"ERRORE CONFIG: {e}")
-        return 2
-
-    cfg_defaults, cfg_scoring = parse_treni_config(cfg_dict)
-
-    ap = argparse.ArgumentParser(add_help=True)
-
-    ap.add_argument("--config", type=str, default=cfg_path, help="Path file TOML (default: auto)")
-
-    ap.add_argument("route", nargs="?", help=f"Preset: {', '.join(list(ROUTES_PRESET.keys()))}")
-    ap.add_argument("dep", nargs="?", help="Range andata")
-    ap.add_argument("ret", nargs="?", help="Range ritorno")
-
-    ap.add_argument("--from", dest="from_station", default=None, help="Stazione di partenza")
-    ap.add_argument("--to", dest="to_station", default=None, help="Stazione di arrivo")
-
-    ap.add_argument("--dep-start", type=str)
-    ap.add_argument("--dep-end", type=str)
-    ap.add_argument("--ret-start", type=str)
-    ap.add_argument("--ret-end", type=str)
-
-    ap.add_argument("--one-way", action="store_true", help="Solo andata")
-
-    ap.add_argument("--max-per-day", type=int, default=cfg_defaults.max_per_day, help="Max soluzioni (tenute) per giorno e per tratta")
-    ap.add_argument("--page-size", type=int, default=cfg_defaults.page_size, help="Page size per offset")
-    ap.add_argument("--min-price", type=float, default=cfg_defaults.min_price, help="Ignora soluzioni con prezzo < X")
-    ap.add_argument("--limit", type=int, default=cfg_defaults.limit, help="Max righe in output")
-
-    ap.add_argument("--verbose", action="store_true", help="Log su stderr")
-    ap.add_argument("--sniff-out", type=str, default=None, help="Scrive log sniffing in JSON")
-
-    ap.add_argument("--poll-empty-retries", type=int, default=cfg_defaults.poll_empty_retries)
-    ap.add_argument("--poll-dup-retries", type=int, default=cfg_defaults.poll_dup_retries)
-    ap.add_argument("--poll-sleep-base", type=float, default=cfg_defaults.poll_sleep_base)
-    ap.add_argument("--scan-cap-mult", type=int, default=cfg_defaults.scan_cap_mult)
-
-    ap.add_argument("--api-timeout-ms", type=int, default=cfg_defaults.api_timeout_ms)
-    ap.add_argument("--api-retries", type=int, default=cfg_defaults.api_retries)
-
-    args = ap.parse_args(argv)
-
-    try:
-        tasks = build_tasks_from_args(args)
-    except Exception as e:
-        eprint(f"ERRORE CONFIG: {e}")
-        return 2
-
-    eprint("Ricerca avviata...")
-
-    try:
-        ranked = await search_ranked_solutions(
-            tasks=tasks,
-            max_solutions_per_day=int(args.max_per_day),
-            page_size=int(args.page_size),
-            min_price=float(args.min_price),
-            verbose=bool(args.verbose),
-            sniff_out=args.sniff_out,
-            scoring=cfg_scoring,
-            api_timeout_ms=int(args.api_timeout_ms),
-            api_retries=int(args.api_retries),
-            poll_empty_retries=int(args.poll_empty_retries),
-            poll_dup_retries=int(args.poll_dup_retries),
-            poll_sleep_base=float(args.poll_sleep_base),
-            scan_cap_multiplier=int(args.scan_cap_mult),
-        )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        eprint(f"ERRORE RUNTIME: {e}")
-        return 1
-
-    show_route = len(tasks) > 1
-    print_table(ranked, limit=int(args.limit), show_route=show_route)
-    return 0
-
-
-def main() -> int:
-    # Per wizard: carichiamo config con ricerca automatica (silenziosa).
-    try:
-        cfg_dict = load_config_dict(None, verbose=False)
-        cfg_defaults, cfg_scoring = parse_treni_config(cfg_dict)
-    except Exception:
-        cfg_defaults, cfg_scoring = TreniDefaultsConfig(), TrainScoringConfig()
-
-    if len(sys.argv) == 1 and sys.stdin.isatty():
-        try:
-            tasks, show_route = interactive_wizard()
-        except Exception as e:
-            eprint(f"ERRORE: {e}")
-            return 2
-
-        eprint("Ricerca avviata...")
-
-        try:
-            ranked = asyncio.run(
-                search_ranked_solutions(
-                    tasks=tasks,
-                    max_solutions_per_day=cfg_defaults.max_per_day,
-                    page_size=cfg_defaults.page_size,
-                    min_price=cfg_defaults.wizard_min_price,
-                    verbose=False,
-                    sniff_out=None,
-                    scoring=cfg_scoring,
-                    api_timeout_ms=cfg_defaults.api_timeout_ms,
-                    api_retries=cfg_defaults.api_retries,
-                    poll_empty_retries=cfg_defaults.poll_empty_retries,
-                    poll_dup_retries=cfg_defaults.poll_dup_retries,
-                    poll_sleep_base=cfg_defaults.poll_sleep_base,
-                    scan_cap_multiplier=cfg_defaults.scan_cap_mult,
-                )
-            )
-        except Exception as e:
-            eprint(f"ERRORE: {e}")
-            return 1
-
-        print_table(ranked, limit=cfg_defaults.limit, show_route=show_route)
-        return 0
-
-    return asyncio.run(amain())
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

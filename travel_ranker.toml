@@ -1,79 +1,82 @@
 # travel_ranker.toml
-# Config unico per:
-# - treni.py (LeFrecce / lefrecce.it BFF)
-# - voli.py  (Google Flights via SerpApi)
+# Unified config for:
+# - trains.py (LeFrecce / lefrecce.it BFF)
+# - flights.py  (Google Flights via SerpApi)
 #
-# Ordine di precedenza:
+# Order of precedence:
 #   CLI  >  TOML  >  default hardcoded
 #
-# Ricerca automatica del file (se NON passi --config):
+# Automatic search for the file (se NON passi --config):
 # - ./travel_ranker.toml
 # - ~/.config/travel_ranker.toml
 # - oppure variabile ambiente: TRAVEL_RANKER_CONFIG=/percorso/al/file.toml
 
+[reminders]
+booking = "!!! REMEMBER TO USE THE 15€ BONUS ON 15€ SU BOOKING.COM !!!"
+
 
 # =============================================================================
-# TRENI (treni.py)
+# TRAINS (trains.py)
 # =============================================================================
-[treni]
-# Filtri / limiti
-min_price = 32.0          # €: scarta soluzioni SALEABLE con prezzo base < min_price
-max_per_day = 120         # max righe "accettate" per giorno e per tratta (dopo filtri/scoring)
-page_size = 40            # paginazione endpoint: limit/offset (più alto = meno chiamate)
-limit = 50                # quante righe stampare in tabella (top-N dopo sorting)
+[trains]
+# Filters / limits
+min_price = 32.0          # €: discard SALEABLE solutions with base price < min_price
+max_per_day = 120         # max rows accepted per day and per route (dopo filtri/scoring)
+page_size = 40            # endpoint pagination: limit/offset (più alto = meno chiamate)
+limit = 50                # how many rows to print in table (top-N dopo sorting)
 
-# Solo per wizard interattivo (quando lanci treni.py senza argomenti CLI)
-wizard_min_price = 5.0   # €: min_price usato in wizard
+# Only for interactive wizard (quando lanci trains.py senza argomenti CLI)
+wizard_min_price = 5.0   # €: min_price used in wizard
 
-# Robustezza rete/polling (non cambia le feature, solo retry/anti-loop)
-poll_empty_retries = 6    # quante volte riprovare se una pagina torna vuota
-poll_dup_retries = 4      # quante volte riprovare se una pagina contiene solo duplicati
-poll_sleep_base = 0.6     # secondi: base per backoff con jitter (aumenta con i tentativi)
+# Network robustness/polling (non cambia le feature, solo retry/anti-loop)
+poll_empty_retries = 6    # how many times to retry if a page is empty
+poll_dup_retries = 4      # how many times to retry if a page contains only duplicates
+poll_sleep_base = 0.6     # seconds: base for backoff with jitter (aumenta con i tentativi)
 scan_cap_mult = 25        # scan_cap = max(300, max_per_day * scan_cap_mult)
-api_timeout_ms = 45000    # ms: timeout per singola chiamata API
-api_retries = 6           # retry per status temporanei (429/5xx/timeout ecc.)
+api_timeout_ms = 45000    # ms: timeout for single API call
+api_retries = 6           # retry for temporary statuses (429/5xx/timeout ecc.)
 
-# Scoring (ranking): ordina per adjusted_cost, poi durata, poi orario partenza.
+# Scoring (ranking): sort by adjusted_cost, poi durata, poi orario partenza.
 # adjusted_cost = prezzo_base
 #               + (durata_ore * time_value_eur_per_hour)
 #               + penalità_partenza_presto
 #               + penalità_arrivo_tardi
 #               + (cambi * change_penalty_eur)
-[treni.scoring]
-time_value_eur_per_hour = 20.0            # €/h: quanto “vale” un’ora di viaggio (più alto => preferisci più breve)
-early_departure_ref_hour = 9              # ora: se parti prima di quest’ora, scatta penalità proporzionale
+[trains.scoring]
+time_value_eur_per_hour = 20.0            # €/h: how much a travel hour is worth (più alto => preferisci più breve)
+early_departure_ref_hour = 9              # ora: if you depart before this hour, proportional penalty triggers
 early_departure_penalty_eur_per_hour = 20.0
 
-late_arrival_start_hour = 22              # ora: se arrivi dopo, scatta penalità proporzionale
-overnight_end_hour = 5                    # ora: arrivi tra 00:00 e questa ora -> penalità continua oltre mezzanotte
+late_arrival_start_hour = 22              # ora: if you arrive after, proportional penalty triggers
+overnight_end_hour = 5                    # ora: arrivals between 00:00 and this hour -> penalty continues after midnight
 late_arrival_penalty_eur_per_hour = 15.0
 
-change_penalty_eur = 5.0                  # € per cambio (cambi = numero_tratte - 1)
+change_penalty_eur = 5.0                  # € per change (changes = number of routes - 1)
 
 
 # =============================================================================
-# VOLI (voli.py) - Google Flights via SerpApi
+# FLIGHTS (flights.py) - Google Flights via SerpApi
 # =============================================================================
-[voli]
-# Parametri query SerpApi / Google Flights
-currency = "EUR"      # valuta
+[flights]
+# Query parameters SerpApi / Google Flights
+currency = "EUR"      # currency
 hl = "it"             # language (hl)
 gl = "it"             # geo (gl)
 
-# Opzioni SerpApi
-deep_search = true    # più completa (più lenta / più chiamate), spesso più risultati
-show_hidden = true    # include voli "hidden"
-no_cache = false      # true = forza refresh, ignora cache
+# SerpApi options
+deep_search = true    # more complete (slower / more calls), often more results
+show_hidden = true    # includes "hidden" flights
+no_cache = false      # true = forces refresh, ignores cache
 
 # Output
-dedup = true          # true = rimuove righe identiche (stessi orari/durata/prezzo)
+dedup = true          # true = removes identical rows (same times/duration/price)
 
-# Filtri / limiti
-min_price = 3         # €: scarta voli con prezzo < min_price (utile contro parsing/risultati anomali)
-top_outbounds = 10    # A/R: per ogni coppia di date, prendi fino a N andate candidate
-top_returns = 20      # A/R: per ogni outbound scelto, prendi fino a N ritorni
-top_flights = 80      # solo andata: per ogni giorno, prendi fino a N voli (best_flights + other_flights)
-limit = 50            # quante righe stampare in tabella
+# Filters / limits
+min_price = 3         # €: discard flights with price < min_price (utile contro parsing/risultati anomali)
+top_outbounds = 10    # A/R: for each date pair, take up to N outbound candidates
+top_returns = 20      # A/R: for each chosen outbound, take up to N returns
+top_flights = 80      # one-way: for each day, take up to N flights (best_flights + other_flights)
+limit = 50            # how many rows to print in table
 
 # Scoring (ranking)
 # One-way:
@@ -83,22 +86,16 @@ limit = 50            # quante righe stampare in tabella
 #               + penalità_arrivo_tardi
 #               + (connessioni * connection_penalty_eur)
 #
-# Round-trip (NOTA: nel codice il "prezzo" usato è quello del ritorno, com'era nell'originale):
+# Round-trip (NOTE: in the code the "price" used is the return one, as in the original):
 # adjusted_cost = prezzo_ritorno
 #               + value_time(durata_andata + durata_ritorno)
 #               + early(andata) + early(ritorno)
 #               + late(andata)  + late(ritorno)
 #               + penalty_connessioni(andata+ritorno)
 #
-# EXTRA Brindisi (BDS):
-# per ogni "uso aeroporto" BDS aggiunge:
-#   +30€ benzina
-#   +1.5h * time_value_eur_per_hour
-#   +3h   * parents_time_value_eur_per_hour
-# Applicazione:
-#   one-way: 1x
-#   round-trip: 2x
-[voli.scoring]
+#
+# EXTRA Brindisi (BDS) e altri aeroporti: configurati dinamicamente.
+[flights.scoring]
 time_value_eur_per_hour = 20.0
 early_departure_ref_hour = 9
 early_departure_penalty_eur_per_hour = 20.0
@@ -106,5 +103,71 @@ late_arrival_start_hour = 22
 late_arrival_penalty_eur_per_hour = 15.0
 connection_penalty_eur = 5.0
 
-# NEW: valore del tempo dei genitori (€/h)
-parents_time_value_eur_per_hour = 8.0
+# Companions hourly cost (€/h)
+companions_time_value_eur_per_hour = 8.0
+
+[flights.airport_extras.BDS]
+fuel_eur = 30.0
+personal_drive_hours = 1.5
+companions_drive_hours = 3.0
+
+# =============================================================================
+# USER INTERFACE (UI) & DEFAULTS
+# =============================================================================
+[ui]
+
+[ui.trains]
+default_origin = "Zurigo HB"
+default_destination = "Alessandria"
+options = [
+    "Torino ( Tutte Le Stazioni )",
+    "Alessandria",
+    "Zurigo HB",
+    "Bari Centrale",
+    "Lecce",
+    "Milano Centrale",
+    "Roma Termini",
+    "Napoli Centrale",
+    "Venezia S. Lucia",
+    "Bologna Centrale"
+]
+
+[ui.flights]
+default_origin = "Zurigo"
+default_destination = "Bari"
+options = [
+    "Zurigo",
+    "Bari",
+    "Brindisi",
+    "Torino",
+    "Milano Linate",
+    "Milano Malpensa",
+    "Genova",
+    "Roma",
+    "Napoli",
+    "Catania",
+    "Palermo",
+    "Venezia",
+    "Bologna"
+]
+
+[ui.flights.iata_mapping]
+zurigo = "ZRH"
+zurich = "ZRH"
+bari = "BRI"
+brindisi = "BDS"
+torino = "TRN"
+milan = "MIL"
+linate = "LIN"
+malpensa = "MXP"
+genova = "GOA"
+genoa = "GOA"
+roma = "ROM"
+rome = "ROM"
+napol = "NAP"
+naples = "NAP"
+catania = "CTA"
+palermo = "PMO"
+venezia = "VCE"
+venice = "VCE"
+bologna = "BLQ"
