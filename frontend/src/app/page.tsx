@@ -135,13 +135,13 @@ export default function Dashboard() {
     const retEndStr = formatDate(retDateRange[1]);
 
     if (!depStartStr) {
-      if (mode === 'trains') setTrainError('{t("err_outbound")}'); else setFlightError('{t("err_outbound")}');
+      if (mode === 'trains') setTrainError(t("err_outbound")); else setFlightError(t("err_outbound"));
       setLoading(false);
       return;
     }
     
     if (!oneWay && !retStartStr) {
-      if (mode === 'trains') setTrainError('{t("err_return")}'); else setFlightError('{t("err_return")}');
+      if (mode === 'trains') setTrainError(t("err_return")); else setFlightError(t("err_return"));
       setLoading(false);
       return;
     }
@@ -151,7 +151,7 @@ export default function Dashboard() {
         const localData = localStorage.getItem('teletransport_settings');
         const parsedLocal = localData ? JSON.parse(localData) : {};
         if (!parsedLocal.serpapiKey) {
-          setFlightError('{t("err_api_key")}');
+          setFlightError(t("err_api_key"));
           setLoading(false);
           return;
         }
@@ -183,10 +183,10 @@ export default function Dashboard() {
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       if (mode === 'trains') {
-        setTrainError(err.message || '{t("err_generic")}');
+        setTrainError(err.message || t("err_generic"));
         setTrainSearched(true);
       } else {
-        setFlightError(err.message || '{t("err_generic")}');
+        setFlightError(err.message || t("err_generic"));
         setFlightSearched(true);
       }
     } finally {
