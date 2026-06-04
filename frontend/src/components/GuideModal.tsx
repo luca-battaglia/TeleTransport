@@ -27,8 +27,9 @@ export default function GuideModal({ isOpen, onClose }: GuideModalProps) {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000,
-      display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px'
+      backgroundColor: 'var(--modal-overlay)',
+      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+      zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px'
     }}>
       <div className="glass-panel" style={{
         width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto',

@@ -16,7 +16,7 @@ const en: Translations = {
 
   // Guide
   guide_title: "TeleTransport Complete Guide",
-  guide_intro: "TeleTransport is designed to find the best travel solutions by calculating an 'Adjusted Cost'. This cost is the sum of the actual ticket price and various time-based penalties, converting your lost time and inconvenience into a monetary value. Here is exactly how each setting works:",
+  guide_intro: "TeleTransport is designed to find the best travel solutions by calculating an 'Adjusted Cost'. This cost is the sum of the actual ticket price and various time-based penalties, converting your lost time and inconvenience into a monetary value. Note: the results and total costs shown include both the outbound and return trips if 'Include Return' is selected. Here is exactly how each setting works:",
   guide_trains: "🚆 Trains Scoring",
   guide_flights: "✈️ Flights Scoring",
   time_value: "Time Value",
@@ -123,7 +123,7 @@ const it: Translations = {
 
   // Guide
   guide_title: "Guida Completa TeleTransport",
-  guide_intro: "TeleTransport è progettato per trovare le migliori soluzioni di viaggio calcolando un 'Costo Adjusted'. Questo costo è la somma del prezzo effettivo del biglietto e di varie penalità basate sul tempo, convertendo il tempo perso e i disagi in un valore monetario. Ecco esattamente come funziona ogni impostazione:",
+  guide_intro: "TeleTransport è progettato per trovare le migliori soluzioni di viaggio calcolando un 'Costo Adjusted'. Questo costo è la somma del prezzo effettivo del biglietto e di varie penalità basate sul tempo, convertendo il tempo perso e i disagi in un valore monetario. Nota: i risultati e i costi totali mostrati includono sia l'andata che il ritorno se l'opzione 'Includi Ritorno' è selezionata. Ecco esattamente come funziona ogni impostazione:",
   guide_trains: "🚆 Scoring Treni",
   guide_flights: "✈️ Scoring Voli",
   time_value: "Valore del Tempo",

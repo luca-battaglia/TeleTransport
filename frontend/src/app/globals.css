@@ -4,6 +4,7 @@
   --foreground: #073642; /* Much darker text */
   
   --card-bg: rgba(238, 232, 213, 0.6);
+  --modal-overlay: rgba(253, 246, 227, 0.7);
   --card-border: rgba(147, 161, 161, 0.4); /* Slightly darker border for contrast */
   --card-hover: rgba(238, 232, 213, 0.9);
   
@@ -25,6 +26,7 @@ body.dark {
   --foreground: #ededed;
   
   --card-bg: rgba(20, 20, 20, 0.6);
+  --modal-overlay: rgba(0, 0, 0, 0.7);
   --card-border: rgba(255, 255, 255, 0.08);
   --card-hover: rgba(255, 255, 255, 0.03);
   
