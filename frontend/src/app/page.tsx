@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [depDateRange, setDepDateRange] = useState<[Date | null, Date | null]>([new Date(), null]);
+  const [depDatePristine, setDepDatePristine] = useState(true);
   const [retDateRange, setRetDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [oneWay, setOneWay] = useState(true);
@@ -231,6 +232,7 @@ export default function Dashboard() {
             parsed.depDateRange[0] ? new Date(parsed.depDateRange[0]) : null,
             parsed.depDateRange[1] ? new Date(parsed.depDateRange[1]) : null
           ]);
+          setDepDatePristine(false);
         }
         if (parsed.retDateRange) {
           setRetDateRange([
@@ -406,10 +408,18 @@ export default function Dashboard() {
                   selectsRange={true}
                   startDate={depDateRange[0] || undefined}
                   endDate={depDateRange[1] || undefined}
-                  onChange={(update: [Date | null, Date | null]) => setDepDateRange(update)}
+                  onChange={(update: [Date | null, Date | null]) => {
+                    if (depDatePristine && update[0] && update[1]) {
+                      setDepDateRange([update[1], null]);
+                    } else {
+                      setDepDateRange(update);
+                    }
+                    setDepDatePristine(false);
+                  }}
                   dateFormat="dd/MM/yyyy"
                   placeholderText={t("outbound_placeholder")}
                   className="w-full pl-8"
+                  isClearable={true}
                   customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
               </div>
@@ -442,6 +452,7 @@ export default function Dashboard() {
                   placeholderText={t("return_placeholder")}
                   className="w-full pl-8"
                   disabled={oneWay}
+                  isClearable={true}
                   customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
               </div>
