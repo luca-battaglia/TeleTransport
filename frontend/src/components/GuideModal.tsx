@@ -69,6 +69,11 @@ export default function GuideModal({ isOpen, onClose }: GuideModalProps) {
           </li>
         </ul>
 
+        <h3 style={{ color: 'var(--accent)', marginBottom: '12px' }}>{t('guide_serpapi_title')}</h3>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '24px', lineHeight: '1.6' }}>
+          {t('guide_serpapi_desc1')} <a href="https://serpapi.com/users/sign_up" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>serpapi.com</a>{t('guide_serpapi_desc2')}
+        </p>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button className="btn-primary" onClick={onClose}>{t('close')}</button>
         </div>
