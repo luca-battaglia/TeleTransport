@@ -16,7 +16,7 @@ const en: Translations = {
 
   // Guide
   guide_title: "TeleTransport Complete Guide",
-  guide_intro: "TeleTransport is designed to find the best travel solutions by calculating an 'Adjusted Cost'. This cost is the sum of the actual ticket price and various time-based penalties, converting your lost time and inconvenience into a monetary value. Note: the results and total costs shown include both the outbound and return trips if 'Include Return' is selected. Here is exactly how each setting works:",
+  guide_intro: "TeleTransport is designed to find the best travel solutions by calculating an 'Adjusted Cost'. This cost is the sum of the actual ticket price and various time-based penalties, converting your lost time and inconvenience into a monetary value. Note: the results and total costs shown include both the outbound and return trips if 'Include Return' is selected.\n\n📅 Date Ranges: The 'Outbound Range' and 'Return Range' fields are flexibility options. They allow you to select multiple days (e.g., from the 3rd to the 5th) so the system will search for flights/trains across all those days at once, giving you the absolute best option. If you only want one specific day, just double-click that same day.\n\nHere is exactly how each setting works:",
   guide_trains: "🚆 Trains Scoring",
   guide_flights: "✈️ Flights Scoring",
   time_value: "Time Value",
@@ -65,6 +65,7 @@ const en: Translations = {
   copy_table: "Copy Table (Markdown)",
   err_outbound: "You must enter an outbound date (start).",
   err_return: "You must enter a return date or check 'One-way'.",
+  err_max_range: "The maximum allowed date range is 7 days. Please select a shorter range to prevent system overload.",
   err_api_key: "To search flights, you must enter your SerpApi Key in the Settings.",
   err_generic: "Error during search",
 
@@ -123,7 +124,7 @@ const it: Translations = {
 
   // Guide
   guide_title: "Guida Completa TeleTransport",
-  guide_intro: "TeleTransport è progettato per trovare le migliori soluzioni di viaggio calcolando un 'Costo Adjusted'. Questo costo è la somma del prezzo effettivo del biglietto e di varie penalità basate sul tempo, convertendo il tempo perso e i disagi in un valore monetario. Nota: i risultati e i costi totali mostrati includono sia l'andata che il ritorno se l'opzione 'Includi Ritorno' è selezionata. Ecco esattamente come funziona ogni impostazione:",
+  guide_intro: "TeleTransport è progettato per trovare le migliori soluzioni di viaggio calcolando un 'Costo Adjusted'. Questo costo è la somma del prezzo effettivo del biglietto e di varie penalità basate sul tempo, convertendo il tempo perso e i disagi in un valore monetario. Nota: i risultati e i costi totali mostrati includono sia l'andata che il ritorno se l'opzione 'Includi Ritorno' è selezionata.\n\n📅 Range di Date: I campi 'Range Andata' e 'Range Ritorno' sono opzioni di flessibilità. Ti permettono di selezionare un intervallo di più giorni (es. dal 3 al 5 del mese) così il sistema cercherà voli/treni su tutti quei giorni contemporaneamente, per trovarti l'opzione migliore in assoluto. Se vuoi cercare per un solo giorno specifico, fai semplicemente doppio click su quel giorno.\n\nEcco esattamente come funziona ogni impostazione:",
   guide_trains: "🚆 Scoring Treni",
   guide_flights: "✈️ Scoring Voli",
   time_value: "Valore del Tempo",
@@ -172,6 +173,7 @@ const it: Translations = {
   copy_table: "Copia Tabella (Markdown)",
   err_outbound: "Devi inserire una data di andata (inizio).",
   err_return: "Devi inserire una data di ritorno o spuntare 'Solo Andata'.",
+  err_max_range: "L'intervallo massimo consentito per il range di date è di 7 giorni. Seleziona un range più breve per non sovraccaricare il sistema.",
   err_api_key: "Per cercare voli è necessario inserire la propria API Key di SerpApi nelle Impostazioni.",
   err_generic: "Errore durante la ricerca",
 

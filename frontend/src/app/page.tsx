@@ -147,6 +147,27 @@ export default function Dashboard() {
       return;
     }
 
+    const MAX_RANGE_DAYS = 7;
+    const msInDay = 24 * 60 * 60 * 1000;
+    
+    if (depDateRange[0] && depDateRange[1]) {
+      const diff = (depDateRange[1].getTime() - depDateRange[0].getTime()) / msInDay;
+      if (diff > MAX_RANGE_DAYS) {
+        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
+        setLoading(false);
+        return;
+      }
+    }
+    
+    if (!oneWay && retDateRange[0] && retDateRange[1]) {
+      const diff = (retDateRange[1].getTime() - retDateRange[0].getTime()) / msInDay;
+      if (diff > MAX_RANGE_DAYS) {
+        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
+        setLoading(false);
+        return;
+      }
+    }
+
     if (mode === 'flights') {
       try {
         const localData = localStorage.getItem('teletransport_settings');
