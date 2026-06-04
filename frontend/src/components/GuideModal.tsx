@@ -43,7 +43,7 @@ export default function GuideModal({ isOpen, onClose }: GuideModalProps) {
         </button>
         
         <h2 style={{ marginBottom: '16px', paddingRight: '32px' }}>{t('guide_title')}</h2>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>
           {t('guide_intro')}
         </p>
 
