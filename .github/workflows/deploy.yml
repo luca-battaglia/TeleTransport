@@ -17,6 +17,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      
+    # Deploy to VPS using SSH
 
     - name: Deploy to VPS
       env:
