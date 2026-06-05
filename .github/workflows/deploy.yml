@@ -1,0 +1,47 @@
+name: Deploy Backend to VPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'core/**'
+      - 'travel_ranker.toml'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Deploy to VPS
+      env:
+        VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+      run: |
+        # Setup SSH key securely
+        mkdir -p ~/.ssh
+        echo "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        
+        # Add host to known_hosts to avoid manual prompts
+        ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+        
+        # Sync the backend and core folders
+        rsync -avz --delete --exclude '__pycache__' ./backend/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/backend/
+        rsync -avz --delete --exclude '__pycache__' ./core/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/core/
+        rsync -avz travel_ranker.toml $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/
+        
+        # Restart the systemd service
+        ssh $VPS_USERNAME@$VPS_HOST << 'EOF'
+          cd ~/teletransport_backend
+          source venv/bin/activate
+          # Install dependencies in case requirements.txt changed
+          pip install -r backend/requirements.txt
+          sudo systemctl restart teletransport
+        EOF
