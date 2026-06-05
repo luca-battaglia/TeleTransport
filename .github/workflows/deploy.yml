@@ -29,16 +29,16 @@ jobs:
         echo "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
         
-        # Add host to known_hosts to avoid manual prompts
-        ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+        # Define SSH options to bypass known_hosts issues
+        SSH_OPTS="-i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         
         # Sync the backend and core folders
-        rsync -avz --delete --exclude '__pycache__' ./backend/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/backend/
-        rsync -avz --delete --exclude '__pycache__' ./core/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/core/
-        rsync -avz travel_ranker.toml $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/
+        rsync -avz --delete --exclude '__pycache__' -e "ssh $SSH_OPTS" ./backend/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/backend/
+        rsync -avz --delete --exclude '__pycache__' -e "ssh $SSH_OPTS" ./core/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/core/
+        rsync -avz -e "ssh $SSH_OPTS" travel_ranker.toml $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/
         
         # Restart the systemd service
-        ssh $VPS_USERNAME@$VPS_HOST << 'EOF'
+        ssh $SSH_OPTS $VPS_USERNAME@$VPS_HOST << 'EOF'
           cd ~/teletransport_backend
           source venv/bin/activate
           # Install dependencies in case requirements.txt changed
