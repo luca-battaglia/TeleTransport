@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-  title: "TeleTransport | Full-Stack",
+  title: "TeleTransport",
   description: "Ricerca Treni e Voli",
 };
 import { LanguageProvider } from "@/lib/i18n";
