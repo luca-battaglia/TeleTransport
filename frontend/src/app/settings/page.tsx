@@ -363,7 +363,7 @@ export default function SettingsPage() {
         
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px' }}>
           <div style={{ flex: '1 1 300px' }}>
-            <h4 style={{ marginBottom: '8px', color: 'var(--text)' }}>Treni</h4>
+            <h4 style={{ marginBottom: '8px', color: 'var(--text)' }}>{t("trains_btn")}</h4>
             <div className="form-group">
               <label className="form-label">{t("default_origin")}</label>
               <input type="text" value={uiTreniOrigin} onChange={e => setUiTreniOrigin(e.target.value)} placeholder={t("settings_origin_train")} />
@@ -379,7 +379,7 @@ export default function SettingsPage() {
           </div>
           
           <div style={{ flex: '1 1 300px' }}>
-            <h4 style={{ marginBottom: '8px', color: 'var(--text)' }}>Voli</h4>
+            <h4 style={{ marginBottom: '8px', color: 'var(--text)' }}>{t("flights_btn")}</h4>
             <div className="form-group">
               <label className="form-label">{t("default_origin")}</label>
               <input type="text" value={uiVoliOrigin} onChange={e => setUiVoliOrigin(e.target.value)} placeholder={t("settings_origin_flight")} />
@@ -403,7 +403,7 @@ export default function SettingsPage() {
       <div style={{ marginTop: '32px', display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px solid var(--card-border)', paddingTop: '24px' }}>
         <button className="btn-primary" onClick={handleSave} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Save size={16} />
-          Salva Impostazioni
+          {t("save_settings")}
         </button>
         {saved && <span style={{ color: '#4ade80', fontSize: '14px', fontWeight: 500 }}>{t("saved_local")}</span>}
       </div>

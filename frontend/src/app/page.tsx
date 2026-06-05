@@ -331,7 +331,7 @@ export default function Dashboard() {
           <button 
             type="button"
             className={mode === 'trains' ? 'btn-primary' : 'btn-outline'} 
-            title="Treni (Alt+1)"
+            title={`${t("trains_btn")} (Alt+1)`}
             onClick={() => { 
               setMode('trains'); 
               const cfg = appConfig?.treni || {};
@@ -340,12 +340,12 @@ export default function Dashboard() {
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === 'trains' ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
           >
-            <Train size={18} /> Treni
+            <Train size={18} /> {t("trains_btn")}
           </button>
           <button 
             type="button"
             className={mode === 'flights' ? 'btn-primary' : 'btn-outline'} 
-            title="Voli (Alt+2)"
+            title={`${t("flights_btn")} (Alt+2)`}
             onClick={() => { 
               setMode('flights'); 
               const cfg = appConfig?.voli || {};
@@ -354,7 +354,7 @@ export default function Dashboard() {
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === 'flights' ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
           >
-            <Plane size={18} /> Voli
+            <Plane size={18} /> {t("flights_btn")}
           </button>
         </div>
       </div>
