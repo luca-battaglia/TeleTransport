@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from 'react';
 import { X, Clock, Train, Plane } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n';
@@ -26,6 +27,16 @@ interface HistoryModalProps {
 
 export default function HistoryModal({ isOpen, onClose, mode, history, onSelect }: HistoryModalProps) {
   const { t, language } = useLanguage();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
