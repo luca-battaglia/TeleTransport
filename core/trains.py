@@ -737,6 +737,7 @@ async def search_ranked_solutions(
     sniff_out: Optional[str],
     *,
     scoring: TrainScoringConfig,
+    no_cache: bool = False,
     api_timeout_ms: int = 45_000,
     api_retries: int = 6,
     poll_empty_retries: int = 6,
@@ -777,7 +778,15 @@ async def search_ranked_solutions(
         request_ctx = context.request
 
         async def _post_json(url: str, payload: Dict[str, Any]) -> Any:
-            return await api_post_json(
+            from core.cache import app_cache, generate_cache_key
+            
+            cache_key = generate_cache_key("treni_api", {"url": url, "payload": payload})
+            if not no_cache:
+                cached = app_cache.get(cache_key)
+                if cached is not None:
+                    return cached
+
+            res = await api_post_json(
                 request_ctx,
                 url,
                 payload,
@@ -786,6 +795,10 @@ async def search_ranked_solutions(
                 verbose=verbose,
                 sniff_log=sniff_log if (sniff_out or verbose) else None,
             )
+            
+            if not no_cache:
+                app_cache.set(cache_key, res, expire=1800)
+            return res
 
         loc_cache: Dict[str, int] = {}
 

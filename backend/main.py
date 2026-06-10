@@ -15,7 +15,6 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
-import diskcache
 import httpx
 
 import sys
@@ -50,14 +49,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-CACHE_DIR = Path(__file__).resolve().parent / "backend_cache"
-app_cache = diskcache.Cache(str(CACHE_DIR))
-
-def generate_cache_key(prefix: str, data: dict) -> str:
-    s = json.dumps(data, sort_keys=True)
-    h = hashlib.md5(s.encode("utf-8")).hexdigest()
-    return f"{prefix}_{h}"
 
 class TrainRequest(BaseModel):
     origins: List[str]
@@ -148,16 +139,7 @@ async def get_trains(
             
     cfg_defaults, cfg_scoring = parse_trains_config(cfg_dict)
     
-    # Check cache
     force_no_cache = cfg_dict.get("no_cache", False) or overrides.get("no_cache", False)
-    cache_req_dict = req.model_dump(mode='json')
-    cache_req_dict["x_config"] = overrides
-    cache_key = generate_cache_key("trains", cache_req_dict)
-
-    if not force_no_cache:
-        cached = app_cache.get(cache_key)
-        if cached is not None:
-            return cached
     
     tasks = []
     # Build tasks for all origin/dest pairs
@@ -179,6 +161,7 @@ async def get_trains(
             verbose=False,
             sniff_out=None,
             scoring=cfg_scoring,
+            no_cache=force_no_cache,
             api_timeout_ms=cfg_defaults.api_timeout_ms,
             api_retries=cfg_defaults.api_retries,
             poll_empty_retries=cfg_defaults.poll_empty_retries,
@@ -200,11 +183,7 @@ async def get_trains(
                 "adjusted_cost": round(r.adjusted_cost, 2)
             })
             
-        res_data = {"data": results}
-        if not force_no_cache:
-            app_cache.set(cache_key, res_data, expire=1800)  # 30 minutes TTL
-            
-        return res_data
+        return {"data": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -232,16 +211,6 @@ async def get_flights(
             pass
             
     cfg_defaults, cfg_scoring = parse_flights_config(cfg_dict)
-    
-    # Check cache
-    cache_req_dict = req.model_dump(mode='json')
-    cache_req_dict["x_config"] = overrides
-    cache_key = generate_cache_key("flights", cache_req_dict)
-
-    if not cfg_defaults.no_cache:
-        cached = app_cache.get(cache_key)
-        if cached is not None:
-            return cached
     
     ret_rng = None
     if not req.one_way and req.ret_start and req.ret_end:
@@ -308,10 +277,6 @@ async def get_flights(
                 "adjusted_cost": round(r.adjusted_cost, 2)
             })
             
-        res_data = {"data": results}
-        if not cfg_defaults.no_cache:
-            app_cache.set(cache_key, res_data, expire=7200)  # 2 hours TTL
-            
-        return res_data
+        return {"data": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

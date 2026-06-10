@@ -487,7 +487,18 @@ def airport_transfer_cost(scoring: VoliScoringConfig, one_way: bool, origin: str
 
 # ---------- SerpApi helpers ----------
 
+from core.cache import app_cache, generate_cache_key
+
 async def serpapi_get_async(client: httpx.AsyncClient, params: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
+    no_cache_flag = params.get("no_cache") == "true"
+    key_params = {k: v for k, v in params.items() if k not in ("api_key", "no_cache")}
+    cache_key = generate_cache_key("serpapi", key_params)
+    
+    if not no_cache_flag:
+        cached = app_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     last_exc: Optional[Exception] = None
     for attempt in range(3):
         try:
@@ -496,6 +507,9 @@ async def serpapi_get_async(client: httpx.AsyncClient, params: Dict[str, Any], t
             data = r.json()
             if data.get("search_metadata", {}).get("status") == "Error" or "error" in data:
                 raise RuntimeError(str(data.get("error") or data))
+                
+            if not no_cache_flag:
+                app_cache.set(cache_key, data, expire=7200)
             return data
         except httpx.HTTPStatusError as e:
             last_exc = e
