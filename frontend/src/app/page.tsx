@@ -17,7 +17,7 @@ export default function Dashboard() {
   const { t, language } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<'trains' | 'flights'>('trains');
-  
+
   const [appConfig, setAppConfig] = useState<any>(null);
   const appConfigRef = useRef<any>(null);
   const [origin, setOrigin] = useState('');
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const [retDateRange, setRetDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [oneWay, setOneWay] = useState(true);
-  
+
   const [loading, setLoading] = useState(false);
   const [trainSearched, setTrainSearched] = useState(false);
   const [flightSearched, setFlightSearched] = useState(false);
@@ -35,7 +35,7 @@ export default function Dashboard() {
   const [flightResults, setFlightResults] = useState<any[]>([]);
   const [trainError, setTrainError] = useState<string | null>(null);
   const [flightError, setFlightError] = useState<string | null>(null);
-  const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([]);
+  const [reminders, setReminders] = useState<{ key: string, text: string, target?: string }[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -61,10 +61,10 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-    const handleCopyTable = () => {
+  const handleCopyTable = () => {
     const res = mode === 'trains' ? trainResults : flightResults;
     if (res.length === 0) return;
-    
+
     let text = "| Route | Departure | Arrival | Duration | Price | Adj Cost |\n";
     text += "|---|---|---|---|---|---|\n";
     res.slice(0, itemsPerPage).forEach(r => {
@@ -79,7 +79,7 @@ export default function Dashboard() {
       const adj = `${r.adjusted_cost || 0} €`;
       text += `| ${route} | ${dep} | ${arr} | ${dur} | ${price} | ${adj} |\n`;
     });
-    
+
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).catch(err => console.error("Clipboard error", err));
     } else {
@@ -144,7 +144,7 @@ export default function Dashboard() {
       setLoading(false);
       return;
     }
-    
+
     if (!oneWay && !retStartStr) {
       if (mode === 'trains') setTrainError(t("err_return")); else setFlightError(t("err_return"));
       setLoading(false);
@@ -153,7 +153,7 @@ export default function Dashboard() {
 
     const MAX_RANGE_DAYS = 7;
     const msInDay = 24 * 60 * 60 * 1000;
-    
+
     if (depDateRange[0] && depDateRange[1]) {
       const diff = (depDateRange[1].getTime() - depDateRange[0].getTime()) / msInDay;
       if (diff > MAX_RANGE_DAYS) {
@@ -162,7 +162,7 @@ export default function Dashboard() {
         return;
       }
     }
-    
+
     if (!oneWay && retDateRange[0] && retDateRange[1]) {
       const diff = (retDateRange[1].getTime() - retDateRange[0].getTime()) / msInDay;
       if (diff > MAX_RANGE_DAYS) {
@@ -181,7 +181,7 @@ export default function Dashboard() {
           setLoading(false);
           return;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     try {
@@ -195,10 +195,10 @@ export default function Dashboard() {
         one_way: oneWay
       };
 
-      const res = mode === 'trains' 
-        ? await fetchTrains(payload, controller.signal) 
+      const res = mode === 'trains'
+        ? await fetchTrains(payload, controller.signal)
         : await fetchFlights(payload, controller.signal);
-        
+
       if (mode === 'trains') {
         setTrainResults(res.data || []);
         setTrainSearched(true);
@@ -228,13 +228,13 @@ export default function Dashboard() {
       if (settings) {
         const parsed = JSON.parse(settings);
         if (parsed.reminders) {
-           setReminders(Object.entries(parsed.reminders).map(([k, v]: [string, any]) => {
-             if (typeof v === 'string') return { key: k, text: v, target: 'voli' };
-             return { key: k, text: String(v.text || ''), target: v.target || 'voli' };
-           }));
+          setReminders(Object.entries(parsed.reminders).map(([k, v]: [string, any]) => {
+            if (typeof v === 'string') return { key: k, text: v, target: 'voli' };
+            return { key: k, text: String(v.text || ''), target: v.target || 'voli' };
+          }));
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const state = sessionStorage.getItem('dashboard_state');
@@ -251,7 +251,7 @@ export default function Dashboard() {
         if (parsed.flightResults) setFlightResults(parsed.flightResults);
         if (parsed.trainError !== undefined) setTrainError(parsed.trainError);
         if (parsed.flightError !== undefined) setFlightError(parsed.flightError);
-        
+
         if (parsed.depDateRange) {
           setDepDateRange([
             parsed.depDateRange[0] ? new Date(parsed.depDateRange[0]) : null,
@@ -266,7 +266,7 @@ export default function Dashboard() {
           ]);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     fetchConfig().then(baseCfg => {
       let cfg = baseCfg || {};
@@ -282,7 +282,7 @@ export default function Dashboard() {
             };
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (Object.keys(cfg).length > 0) {
         setAppConfig(cfg);
@@ -328,33 +328,33 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
+
       {/* Type Toggle */}
       <div className="flex justify-center" style={{ marginBottom: '16px' }}>
         <div style={{ display: 'inline-flex', gap: '12px' }}>
-          <button 
+          <button
             type="button"
-            className={mode === 'trains' ? 'btn-primary' : 'btn-outline'} 
+            className={mode === 'trains' ? 'btn-primary' : 'btn-outline'}
             title={`${t("trains_btn")} (Alt+1)`}
-            onClick={() => { 
-              setMode('trains'); 
+            onClick={() => {
+              setMode('trains');
               const cfg = appConfig?.treni || {};
-              setOrigin(cfg.default_origin || 'Zurigo HB'); 
-              setDestination(cfg.default_destination || 'Alessandria'); 
+              setOrigin(cfg.default_origin || 'Zurigo HB');
+              setDestination(cfg.default_destination || 'Alessandria');
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === 'trains' ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
           >
             <Train size={18} /> {t("trains_btn")}
           </button>
-          <button 
+          <button
             type="button"
-            className={mode === 'flights' ? 'btn-primary' : 'btn-outline'} 
+            className={mode === 'flights' ? 'btn-primary' : 'btn-outline'}
             title={`${t("flights_btn")} (Alt+2)`}
-            onClick={() => { 
-              setMode('flights'); 
+            onClick={() => {
+              setMode('flights');
               const cfg = appConfig?.voli || {};
-              setOrigin(cfg.default_origin || 'Zurigo'); 
-              setDestination(cfg.default_destination || 'Bari'); 
+              setOrigin(cfg.default_origin || 'Zurigo');
+              setDestination(cfg.default_destination || 'Bari');
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === 'flights' ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
           >
@@ -364,9 +364,9 @@ export default function Dashboard() {
       </div>
 
       {(() => {
-        const activeReminders = reminders.filter(r => 
-          r.target === 'both' || 
-          (mode === 'flights' && r.target === 'voli') || 
+        const activeReminders = reminders.filter(r =>
+          r.target === 'both' ||
+          (mode === 'flights' && r.target === 'voli') ||
           (mode === 'trains' && r.target === 'treni')
         );
         if (activeReminders.length === 0) return null;
@@ -383,10 +383,10 @@ export default function Dashboard() {
       })()}
 
       {/* Search Form */}
-      <motion.form 
+      <motion.form
         ref={formRef}
-        onSubmit={handleSearch} 
-        className="glass-panel" 
+        onSubmit={handleSearch}
+        className="glass-panel"
         style={{ padding: '32px' }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -394,7 +394,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', gridColumn: '1 / -1' }}>
             <div style={{ flex: 1 }}>
-              <AutocompleteInput 
+              <AutocompleteInput
                 label={t("origin")}
                 value={origin}
                 onChange={setOrigin}
@@ -402,8 +402,8 @@ export default function Dashboard() {
                 placeholder={mode === 'trains' ? t("origin_placeholder_train") : t("origin_placeholder_flight")}
               />
             </div>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="btn-outline"
               onClick={() => {
                 setOrigin(destination);
@@ -415,7 +415,7 @@ export default function Dashboard() {
               <ArrowLeftRight size={18} />
             </button>
             <div style={{ flex: 1 }}>
-              <AutocompleteInput 
+              <AutocompleteInput
                 label={t("destination")}
                 value={destination}
                 onChange={setDestination}
@@ -458,13 +458,13 @@ export default function Dashboard() {
               <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>(Inizio - Fine)</div>
             </div>
           </div>
-          
+
           <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
               <label className="form-label" style={{ marginBottom: 0 }}>{t("return_range")}</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={!oneWay}
                   onChange={e => setOneWay(!e.target.checked)}
                   style={{ width: 'auto', cursor: 'pointer' }}
@@ -502,8 +502,8 @@ export default function Dashboard() {
         </div>
 
         <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="btn-outline"
             onClick={() => {
               if (mode === 'trains') {
@@ -524,14 +524,14 @@ export default function Dashboard() {
                 };
                 const o = mapIata(origin);
                 const d = mapIata(destination);
-                
+
                 const formatDate = (date: Date | null) => {
                   if (!date) return '';
                   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                 };
                 const depStr = formatDate(depDateRange[0]);
                 const retStr = formatDate(retDateRange[0]);
-                
+
                 let url = `https://www.google.com/travel/flights?q=Flights%20to%20${d}%20from%20${o}%20on%20${depStr}`;
                 if (!oneWay && retStr) {
                   url += `%20through%20${retStr}`;
@@ -545,13 +545,13 @@ export default function Dashboard() {
           >
             {mode === 'trains' ? t("open_trenitalia") : t("open_google_flights")}
           </button>
-          
+
           <button type="submit" className="btn-primary" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
             {loading ? t("searching") : t("search_solutions")}
           </button>
           {loading && (
-            <div 
+            <div
               onClick={handleStop}
               title={t("stop_search")}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '8px', color: 'var(--primary)' }}
@@ -577,12 +577,12 @@ export default function Dashboard() {
 
       <AnimatePresence>
         {(mode === 'trains' ? trainResults : flightResults).length > 0 && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-              <button 
+              <button
                 type="button"
                 className="btn-outline"
                 onClick={handleCopyTable}
@@ -593,35 +593,35 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("route")}</th>
-                  <th>{t("departure")}</th>
-                  <th>{t("arrival")}</th>
-                  <th>{t("duration")}</th>
-                  <th>{t("price")}</th>
-                  <th>{t("adj_cost")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(mode === 'trains' ? trainResults : flightResults).slice(0, itemsPerPage).map((r, i) => (
-                  <tr key={i}>
-                    <td>
-                      <span style={{ fontWeight: 500 }}>
-                        {r.route || `${r.origin} → ${r.destination}`}
-                      </span>
-                      {!oneWay && r.in_dep && <div style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>{t("return_label")}: {r.destination} → {r.origin}</div>}
-                    </td>
-                    <td>{new Date(r.out_dep || r.dep).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>{new Date(r.out_arr || r.arr).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>{Math.floor((r.duration_min || r.total_duration_min) / 60)}h {(r.duration_min || r.total_duration_min) % 60}m</td>
-                    <td style={{ fontWeight: 600 }}>{r.price_eur} €</td>
-                    <td style={{ color: 'var(--accent)' }}>{r.adjusted_cost} €</td>
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t("route")}</th>
+                    <th>{t("departure")}</th>
+                    <th>{t("arrival")}</th>
+                    <th>{t("duration")}</th>
+                    <th>{t("price")}</th>
+                    <th>{t("adj_cost")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(mode === 'trains' ? trainResults : flightResults).slice(0, itemsPerPage).map((r, i) => (
+                    <tr key={i}>
+                      <td>
+                        <span style={{ fontWeight: 500 }}>
+                          {r.route || `${r.origin} → ${r.destination}`}
+                        </span>
+                        {!oneWay && r.in_dep && <div style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>{t("return_label")}: {r.destination} → {r.origin}</div>}
+                      </td>
+                      <td>{new Date(r.out_dep || r.dep).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td>{new Date(r.out_arr || r.arr).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td>{Math.floor((r.duration_min || r.total_duration_min) / 60)}h {(r.duration_min || r.total_duration_min) % 60}m</td>
+                      <td style={{ fontWeight: 600 }}>{r.price_eur} €</td>
+                      <td style={{ color: 'var(--accent)' }}>{r.adjusted_cost} €</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </motion.div>
         )}
@@ -630,8 +630,8 @@ export default function Dashboard() {
       {(mode === 'trains' ? trainResults : flightResults).length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
           <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{t("results_to_show")}</span>
-          <select 
-            value={itemsPerPage} 
+          <select
+            value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
             style={{ width: '80px', padding: '6px 10px', background: 'var(--card-bg)' }}
           >
@@ -643,7 +643,7 @@ export default function Dashboard() {
           </select>
         </div>
       )}
-      
+
     </div>
   );
 }
