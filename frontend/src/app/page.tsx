@@ -4,14 +4,12 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy } from 'lucide-react';
+import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, Clock } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
-import DatePicker, { registerLocale } from 'react-datepicker';
+import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { it, enUS } from 'date-fns/locale';
-
-registerLocale('it', it as any);
-registerLocale('en', enUS as any);
+import HistoryModal, { HistoryEntry } from '@/components/HistoryModal';
 
 export default function Dashboard() {
   const { t, language } = useLanguage();
@@ -40,6 +38,9 @@ export default function Dashboard() {
   const formRef = useRef<HTMLFormElement>(null);
   const trainsAbortControllerRef = useRef<AbortController | null>(null);
   const flightsAbortControllerRef = useRef<AbortController | null>(null);
+  const [trainHistory, setTrainHistory] = useState<HistoryEntry[]>([]);
+  const [flightHistory, setFlightHistory] = useState<HistoryEntry[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const loading = mode === 'trains' ? trainsLoading : flightsLoading;
 
@@ -197,13 +198,33 @@ export default function Dashboard() {
       const res = isTrains
         ? await fetchTrains(payload, controller.signal)
         : await fetchFlights(payload, controller.signal);
+      
+      const newEntry: HistoryEntry = {
+        timestamp: Date.now(),
+        origin, destination, depStartStr,
+        depEndStr: depEndStr || undefined,
+        retStartStr: retStartStr || undefined,
+        retEndStr: retEndStr || undefined,
+        oneWay,
+        results: res.data || []
+      };
 
       if (isTrains) {
         setTrainResults(res.data || []);
         setTrainSearched(true);
+        setTrainHistory(prev => {
+          const updated = [newEntry, ...prev].slice(0, 10);
+          localStorage.setItem('teletransport_history_trains', JSON.stringify(updated));
+          return updated;
+        });
       } else {
         setFlightResults(res.data || []);
         setFlightSearched(true);
+        setFlightHistory(prev => {
+          const updated = [newEntry, ...prev].slice(0, 10);
+          localStorage.setItem('teletransport_history_flights', JSON.stringify(updated));
+          return updated;
+        });
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -223,7 +244,33 @@ export default function Dashboard() {
     }
   };
 
+  const loadHistoryEntry = (entry: HistoryEntry) => {
+    setOrigin(entry.origin);
+    setDestination(entry.destination);
+    setDepDateRange([new Date(entry.depStartStr), entry.depEndStr ? new Date(entry.depEndStr) : null]);
+    setRetDateRange([entry.retStartStr ? new Date(entry.retStartStr) : null, entry.retEndStr ? new Date(entry.retEndStr) : null]);
+    setDepDatePristine(false);
+    setOneWay(entry.oneWay);
+
+    if (mode === 'trains') {
+      setTrainResults(entry.results);
+      setTrainSearched(true);
+      setTrainError(null);
+    } else {
+      setFlightResults(entry.results);
+      setFlightSearched(true);
+      setFlightError(null);
+    }
+  };
+
   useEffect(() => {
+    try {
+      const histTrains = localStorage.getItem('teletransport_history_trains');
+      if (histTrains) setTrainHistory(JSON.parse(histTrains));
+      const histFlights = localStorage.getItem('teletransport_history_flights');
+      if (histFlights) setFlightHistory(JSON.parse(histFlights));
+    } catch (e) { }
+
     try {
       const settings = localStorage.getItem('teletransport_settings');
       if (settings) {
@@ -547,6 +594,19 @@ export default function Dashboard() {
             {mode === 'trains' ? t("open_trenitalia") : t("open_google_flights")}
           </button>
 
+          <button
+            type="button"
+            className="btn-outline"
+            onClick={() => setIsHistoryOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px', gap: '8px' }}
+            title={language === 'it' ? 'Cronologia' : 'History'}
+          >
+            <Clock size={16} />
+            <span style={{ display: 'none', '@media (min-width: 600px)': { display: 'inline' } } as any}>
+              {language === 'it' ? 'Cronologia' : 'History'}
+            </span>
+          </button>
+
           <button type="submit" className="btn-primary" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
             {loading ? t("searching") : t("search_solutions")}
@@ -645,6 +705,13 @@ export default function Dashboard() {
         </div>
       )}
 
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        mode={mode}
+        history={mode === 'trains' ? trainHistory : flightHistory}
+        onSelect={loadHistoryEntry}
+      />
     </div>
   );
 }
