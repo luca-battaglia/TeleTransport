@@ -14,6 +14,11 @@ export default function AutocompleteInput({ value, onChange, options, placeholde
   const [isOpen, setIsOpen] = useState(false);
   const [filtered, setFiltered] = useState<string[]>([]);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef(value);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -59,7 +64,8 @@ export default function AutocompleteInput({ value, onChange, options, placeholde
         }}
         onBlur={() => {
           setTimeout(() => {
-            if (value && !options.some(opt => opt.toLowerCase() === value.toLowerCase())) {
+            const currentVal = valueRef.current.trim();
+            if (currentVal && currentVal.length !== 3 && !options.some(opt => opt.toLowerCase().trim() === currentVal.toLowerCase())) {
               onChange("");
             }
           }, 150);
