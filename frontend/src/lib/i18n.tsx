@@ -116,7 +116,9 @@ const en: Translations = {
   settings_origin_flight: "e.g., Rome",
   settings_dest_flight: "e.g., Milan",
   settings_id_placeholder: "ID (e.g., booking)",
-  reminder_text_placeholder: "Reminder text"
+  reminder_text_placeholder: "Reminder text",
+  options_trains: "Turin (All Stations),Alessandria,Zurich HB,Bari Centrale,Lecce,Milan Central,Rome Termini,Naples Central,Venice S. Lucia,Bologna Central",
+  options_flights: "Zurich,Bari,Brindisi,Turin,Milan Linate,Milan Malpensa,Genoa,Rome,Naples,Catania,Palermo,Venice,Bologna"
 };
 
 const it: Translations = {
@@ -227,7 +229,9 @@ const it: Translations = {
   settings_origin_flight: "es. Roma",
   settings_dest_flight: "es. Milano",
   settings_id_placeholder: "ID (es. booking)",
-  reminder_text_placeholder: "Testo del promemoria"
+  reminder_text_placeholder: "Testo del promemoria",
+  options_trains: "Torino ( Tutte Le Stazioni ),Alessandria,Zurigo HB,Bari Centrale,Lecce,Milano Centrale,Roma Termini,Napoli Centrale,Venezia S. Lucia,Bologna Centrale",
+  options_flights: "Zurigo,Bari,Brindisi,Torino,Milano Linate,Milano Malpensa,Genova,Roma,Napoli,Catania,Palermo,Venezia,Bologna"
 };
 
 const dictionaries = { en, it };

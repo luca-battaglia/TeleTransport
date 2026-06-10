@@ -57,6 +57,13 @@ export default function AutocompleteInput({ value, onChange, options, placeholde
           else setFiltered(options.filter(opt => opt.toLowerCase().includes(value.toLowerCase())));
           setIsOpen(true);
         }}
+        onBlur={() => {
+          setTimeout(() => {
+            if (value && !options.some(opt => opt.toLowerCase() === value.toLowerCase())) {
+              onChange("");
+            }
+          }, 150);
+        }}
         placeholder={placeholder}
         style={{ width: '100%' }}
       />

@@ -217,7 +217,7 @@ def get_flights(
         for key, iata in mapping.items():
             if key in n:
                 return iata
-        return name
+        return name.upper() if len(name.strip()) == 3 else name
 
     mapped_origins = [map_to_iata(o) for o in req.origins]
     mapped_destinations = [map_to_iata(d) for d in req.destinations]
