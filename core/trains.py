@@ -820,16 +820,11 @@ async def search_ranked_solutions(
             return loc_id
 
         ranked: List[RankedSolution] = []
+        sem = asyncio.Semaphore(6)
 
-        for t in tasks:
-            dep_id = await resolve_id(t.route.from_name)
-            arr_id = await resolve_id(t.route.to_name)
-            route_label = t.route_label
-
-            if verbose:
-                eprint(f"--- Processing {route_label} : {t.d1} -> {t.d2} ---")
-
-            for day in daterange(t.d1, t.d2):
+        async def fetch_day(t: SearchTask, route_label: str, dep_id: int, arr_id: int, day: date) -> List[RankedSolution]:
+            async with sem:
+                day_ranked: List[RankedSolution] = []
                 departure_iso = build_departure_iso(day, 0, 0)
 
                 seen_keys: set[str] = set()
@@ -912,7 +907,7 @@ async def search_ranked_solutions(
                         if base_price < min_price:
                             continue
 
-                        ranked.append(
+                        day_ranked.append(
                             RankedSolution(
                                 route_label=route_label,
                                 dep=dep_local,
@@ -948,9 +943,27 @@ async def search_ranked_solutions(
                     # micro-throttle quando stiamo facendo molte chiamate in rapida sequenza
                     if added_in_call == 0 and (empty_tries == 0):
                         await asyncio.sleep(_jitter_sleep(0.12, factor=1.0))
-
                 if scanned >= scan_cap and verbose:
                     eprint(f"[WARN] scan cap reached day={day} route={route_label}")
+                
+                return day_ranked
+
+        day_tasks = []
+        for t in tasks:
+            dep_id = await resolve_id(t.route.from_name)
+            arr_id = await resolve_id(t.route.to_name)
+            route_label = t.route_label
+
+            if verbose:
+                eprint(f"--- Processing {route_label} : {t.d1} -> {t.d2} ---")
+
+            for day in daterange(t.d1, t.d2):
+                day_tasks.append(fetch_day(t, route_label, dep_id, arr_id, day))
+                
+        results = await asyncio.gather(*day_tasks)
+        for res in results:
+            ranked.extend(res)
+
 
         await browser.close()
 
