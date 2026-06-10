@@ -750,13 +750,18 @@ async def search_ranked_solutions(
     _pw = None
     _browser = None
     _request_ctx = None
+    _init_lock = asyncio.Lock()
 
     async def get_request_ctx():
         nonlocal _pw, _browser, _request_ctx
         if _request_ctx is not None:
             return _request_ctx
 
-        from playwright.async_api import async_playwright
+        async with _init_lock:
+            if _request_ctx is not None:
+                return _request_ctx
+
+            from playwright.async_api import async_playwright
         if verbose:
             eprint("[INIT] Avvio headless browser...")
         _pw = await async_playwright().start()
