@@ -1,5 +1,5 @@
 import json
-import requests
+import hashlib
 from datetime import date
 from typing import List, Optional
 
@@ -13,7 +13,10 @@ if hasattr(typing, "_eval_type"):
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
+import diskcache
+import httpx
 
 import sys
 from pathlib import Path
@@ -36,6 +39,9 @@ from core.flights import (
 
 app = FastAPI(title="TeleTransport API")
 
+# Add Gzip middleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Allow frontend to access the API
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +50,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+CACHE_DIR = Path(__file__).resolve().parent / "backend_cache"
+app_cache = diskcache.Cache(str(CACHE_DIR))
+
+def generate_cache_key(prefix: str, data: dict) -> str:
+    s = json.dumps(data, sort_keys=True)
+    h = hashlib.md5(s.encode("utf-8")).hexdigest()
+    return f"{prefix}_{h}"
 
 class TrainRequest(BaseModel):
     origins: List[str]
@@ -124,6 +138,7 @@ async def get_trains(
     except Exception:
         cfg_dict = {}
 
+    overrides = {}
     if x_config:
         try:
             overrides = json.loads(x_config)
@@ -132,6 +147,17 @@ async def get_trains(
             pass
             
     cfg_defaults, cfg_scoring = parse_trains_config(cfg_dict)
+    
+    # Check cache
+    force_no_cache = cfg_dict.get("no_cache", False) or overrides.get("no_cache", False)
+    cache_req_dict = req.model_dump(mode='json')
+    cache_req_dict["x_config"] = overrides
+    cache_key = generate_cache_key("trains", cache_req_dict)
+
+    if not force_no_cache:
+        cached = app_cache.get(cache_key)
+        if cached is not None:
+            return cached
     
     tasks = []
     # Build tasks for all origin/dest pairs
@@ -173,12 +199,17 @@ async def get_trains(
                 "price_eur": r.price_eur,
                 "adjusted_cost": round(r.adjusted_cost, 2)
             })
-        return {"data": results}
+            
+        res_data = {"data": results}
+        if not force_no_cache:
+            app_cache.set(cache_key, res_data, expire=1800)  # 30 minutes TTL
+            
+        return res_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/flights")
-def get_flights(
+async def get_flights(
     req: FlightRequest,
     x_serpapi_key: Optional[str] = Header(None),
     x_config: Optional[str] = Header(None)
@@ -192,6 +223,7 @@ def get_flights(
     except Exception:
         cfg_dict = {}
 
+    overrides = {}
     if x_config:
         try:
             overrides = json.loads(x_config)
@@ -200,6 +232,16 @@ def get_flights(
             pass
             
     cfg_defaults, cfg_scoring = parse_flights_config(cfg_dict)
+    
+    # Check cache
+    cache_req_dict = req.model_dump(mode='json')
+    cache_req_dict["x_config"] = overrides
+    cache_key = generate_cache_key("flights", cache_req_dict)
+
+    if not cfg_defaults.no_cache:
+        cached = app_cache.get(cache_key)
+        if cached is not None:
+            return cached
     
     ret_rng = None
     if not req.one_way and req.ret_start and req.ret_end:
@@ -222,29 +264,29 @@ def get_flights(
     mapped_origins = [map_to_iata(o) for o in req.origins]
     mapped_destinations = [map_to_iata(d) for d in req.destinations]
 
-    session = requests.Session()
     try:
-        rows = build_rows_multi(
-            session=session,
-            api_key=api_key,
-            origins=mapped_origins,
-            destinations=mapped_destinations,
-            dep_start=req.dep_start,
-            dep_end=req.dep_end,
-            ret_rng=ret_rng,
-            one_way=req.one_way or (ret_rng is None),
-            currency=cfg_defaults.currency,
-            hl=cfg_defaults.hl,
-            gl=cfg_defaults.gl,
-            deep_search=cfg_defaults.deep_search,
-            top_outbounds=cfg_defaults.top_outbounds,
-            top_returns=cfg_defaults.top_returns,
-            top_flights=cfg_defaults.top_flights,
-            min_ticket_price=cfg_defaults.min_price,
-            show_hidden=cfg_defaults.show_hidden,
-            no_cache=cfg_defaults.no_cache,
-            scoring=cfg_scoring,
-        )
+        async with httpx.AsyncClient(timeout=120) as client:
+            rows = await build_rows_multi(
+                client=client,
+                api_key=api_key,
+                origins=mapped_origins,
+                destinations=mapped_destinations,
+                dep_start=req.dep_start,
+                dep_end=req.dep_end,
+                ret_rng=ret_rng,
+                one_way=req.one_way or (ret_rng is None),
+                currency=cfg_defaults.currency,
+                hl=cfg_defaults.hl,
+                gl=cfg_defaults.gl,
+                deep_search=cfg_defaults.deep_search,
+                top_outbounds=cfg_defaults.top_outbounds,
+                top_returns=cfg_defaults.top_returns,
+                top_flights=cfg_defaults.top_flights,
+                min_ticket_price=cfg_defaults.min_price,
+                show_hidden=cfg_defaults.show_hidden,
+                no_cache=cfg_defaults.no_cache,
+                scoring=cfg_scoring,
+            )
         
         # Deduplicate
         from core.flights import dedup_rows
@@ -265,6 +307,11 @@ def get_flights(
                 "price_eur": r.price_eur,
                 "adjusted_cost": round(r.adjusted_cost, 2)
             })
-        return {"data": results}
+            
+        res_data = {"data": results}
+        if not cfg_defaults.no_cache:
+            app_cache.set(cache_key, res_data, expire=7200)  # 2 hours TTL
+            
+        return res_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

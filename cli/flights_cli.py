@@ -3,7 +3,8 @@ import argparse
 import os
 import sys
 import getpass
-import requests
+import asyncio
+import httpx
 from datetime import date
 from typing import List, Optional, Tuple
 from core.flights import build_rows_multi, dedup_rows, print_table, interactive_wizard, load_config_dict, parse_flights_config, parse_date_range_human, ROUTE_PRESETS, eprint
@@ -52,15 +53,16 @@ def main() -> int:
 
         eprint("Search avviata")
 
-        session = requests.Session()
         try:
             deep_search = cfg_defaults.deep_search
             show_hidden = cfg_defaults.show_hidden
             no_cache = cfg_defaults.no_cache
             dedup = cfg_defaults.dedup
 
-            rows = build_rows_multi(
-                session=session,
+            async def run_wizard():
+                async with httpx.AsyncClient(timeout=120) as client:
+                    return await build_rows_multi(
+                        client=client,
                 api_key=api_key,
                 origins=sel.origins,
                 destinations=sel.destinations,
@@ -79,7 +81,8 @@ def main() -> int:
                 show_hidden=show_hidden,
                 no_cache=no_cache,
                 scoring=cfg_scoring,
-            )
+                    )
+            rows = asyncio.run(run_wizard())
 
             if dedup:
                 rows = dedup_rows(rows, one_way=one_way or (ret_rng is None))
@@ -200,10 +203,11 @@ def main() -> int:
 
     eprint("Search avviata")
 
-    session = requests.Session()
     try:
-        rows = build_rows_multi(
-            session=session,
+        async def run_cli():
+            async with httpx.AsyncClient(timeout=120) as client:
+                return await build_rows_multi(
+                    client=client,
             api_key=args.api_key,
             origins=origins,
             destinations=destinations,
@@ -222,7 +226,8 @@ def main() -> int:
             show_hidden=show_hidden,
             no_cache=no_cache,
             scoring=cfg_scoring,
-        )
+                )
+        rows = asyncio.run(run_cli())
         if args.dedup:
             rows = dedup_rows(rows, one_way=one_way or (ret_rng is None))
         print_table(rows, limit=args.limit, one_way=one_way or (ret_rng is None))

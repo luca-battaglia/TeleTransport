@@ -25,6 +25,8 @@ import os
 import re
 import sys
 import time
+import asyncio
+import httpx
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -485,27 +487,27 @@ def airport_transfer_cost(scoring: VoliScoringConfig, one_way: bool, origin: str
 
 # ---------- SerpApi helpers ----------
 
-def serpapi_get(session: requests.Session, params: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
+async def serpapi_get_async(client: httpx.AsyncClient, params: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
     last_exc: Optional[Exception] = None
     for attempt in range(3):
         try:
-            r = session.get(SERPAPI_ENDPOINT, params=params, timeout=timeout)
+            r = await client.get(SERPAPI_ENDPOINT, params=params, timeout=timeout)
             r.raise_for_status()
             data = r.json()
             if data.get("search_metadata", {}).get("status") == "Error" or "error" in data:
                 raise RuntimeError(str(data.get("error") or data))
             return data
-        except requests.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             last_exc = e
-            status = getattr(e.response, "status_code", None)
+            status = e.response.status_code
             if status in (429, 500, 502, 503, 504) and attempt < 2:
-                time.sleep(1.0 * (2 ** attempt))
+                await asyncio.sleep(1.0 * (2 ** attempt))
                 continue
             raise
         except Exception as e:
             last_exc = e
             if attempt < 2:
-                time.sleep(1.0 * (2 ** attempt))
+                await asyncio.sleep(1.0 * (2 ** attempt))
                 continue
             raise
     raise RuntimeError(str(last_exc) if last_exc else "unknown error")
@@ -675,8 +677,8 @@ def dedup_rows(rows: List[RankedRow], one_way: bool) -> List[RankedRow]:
 
 # ---------- core logic (single pair) ----------
 
-def build_roundtrip_rows(
-    session: requests.Session,
+async def build_roundtrip_rows(
+    client: httpx.AsyncClient,
     api_key: str,
     origin: str,
     destination: str,
@@ -697,109 +699,315 @@ def build_roundtrip_rows(
     ground_extra_eur: float,
 ) -> List[RankedRow]:
 
-    rows: List[RankedRow] = []
     dep_days = daterange(dep_start, dep_end)
     ret_days = daterange(ret_start, ret_end)
+    serp_stops = "0"
 
-    serp_stops = "0"  # any stops
+    async def fetch_pair(dep_day: date, ret_day: date) -> List[RankedRow]:
+        if ret_day <= dep_day:
+            return []
+            
+        base_params: Dict[str, Any] = {
+            "engine": "google_flights",
+            "api_key": api_key,
+            "departure_id": origin,
+            "arrival_id": destination,
+            "outbound_date": dep_day.isoformat(),
+            "return_date": ret_day.isoformat(),
+            "type": "1",
+            "currency": currency,
+            "hl": hl,
+            "gl": gl,
+            "stops": serp_stops,
+            "sort_by": "2",
+        }
+        if deep_search:
+            base_params["deep_search"] = "true"
+        apply_serpapi_extras(base_params, show_hidden=show_hidden, no_cache=no_cache)
 
-    for dep_day in dep_days:
-        for ret_day in ret_days:
-            if ret_day <= dep_day:
+        try:
+            resp_out = await serpapi_get_async(client, base_params)
+        except Exception as e:
+            eprint(f"Errore API (andata) {origin}->{destination}: {e}")
+            return []
+
+        out_all = flights_list(resp_out)
+        out_all = [it for it in out_all if it.get("departure_token")]
+        out_items = select_top_from_items(out_all, top_outbounds)
+
+        pair_rows = []
+        for out_item in out_items:
+            dep_token = out_item.get("departure_token")
+            if not dep_token:
                 continue
-
-            base_params: Dict[str, Any] = {
-                "engine": "google_flights",
-                "api_key": api_key,
-                "departure_id": origin,
-                "arrival_id": destination,
-                "outbound_date": dep_day.isoformat(),
-                "return_date": ret_day.isoformat(),
-                "type": "1",
-                "currency": currency,
-                "hl": hl,
-                "gl": gl,
-                "stops": serp_stops,
-                "sort_by": "2",
-            }
-            if deep_search:
-                base_params["deep_search"] = "true"
-            apply_serpapi_extras(base_params, show_hidden=show_hidden, no_cache=no_cache)
 
             try:
-                resp_out = serpapi_get(session, base_params)
-            except Exception as e:
-                eprint(f"Errore API (andata) {origin}->{destination}: {e}")
+                out_dep, out_arr = first_last_times(out_item, dep_day)
+            except Exception:
                 continue
 
-            out_all = flights_list(resp_out)
-            out_all = [it for it in out_all if it.get("departure_token")]
-            out_items = select_top_from_items(out_all, top_outbounds)
+            out_dur = get_total_duration(out_item)
+            out_conns = connections_count(out_item)
 
-            for out_item in out_items:
-                dep_token = out_item.get("departure_token")
-                if not dep_token:
+            ret_params = dict(base_params)
+            ret_params["departure_token"] = dep_token
+
+            try:
+                resp_ret = await serpapi_get_async(client, ret_params)
+            except Exception as e:
+                eprint(f"Errore API (ritorno) {origin}->{destination}: {e}")
+                continue
+
+            ret_items = select_top_items(resp_ret, top_returns)
+
+            for ret_item in ret_items:
+                price = get_price(ret_item)
+                if price is None or price < min_ticket_price:
                     continue
 
                 try:
-                    out_dep, out_arr = first_last_times(out_item, dep_day)
+                    in_dep, in_arr = first_last_times(ret_item, ret_day)
                 except Exception:
                     continue
 
-                out_dur = get_total_duration(out_item)
-                out_conns = connections_count(out_item)
+                in_dur = get_total_duration(ret_item)
+                in_conns = connections_count(ret_item)
 
-                ret_params = dict(base_params)
-                ret_params["departure_token"] = dep_token
+                total_dur = out_dur + in_dur
+                conns_penalty = (out_conns + in_conns) * float(scoring.connection_penalty_eur)
 
-                try:
-                    resp_ret = serpapi_get(session, ret_params)
-                except Exception as e:
-                    eprint(f"Errore API (ritorno) {origin}->{destination}: {e}")
-                    continue
+                adjusted = (
+                    float(price)
+                    + time_value_cost(total_dur, scoring)
+                    + early_departure_penalty(out_dep, scoring)
+                    + early_departure_penalty(in_dep, scoring)
+                    + late_arrival_penalty(out_arr, scoring)
+                    + late_arrival_penalty(in_arr, scoring)
+                    + conns_penalty
+                    + float(ground_extra_eur)
+                )
 
-                ret_items = select_top_items(resp_ret, top_returns)
-
-                for ret_item in ret_items:
-                    price = get_price(ret_item)
-                    if price is None or price < min_ticket_price:
-                        continue
-
-                    try:
-                        in_dep, in_arr = first_last_times(ret_item, ret_day)
-                    except Exception:
-                        continue
-
-                    in_dur = get_total_duration(ret_item)
-                    in_conns = connections_count(ret_item)
-
-                    total_dur = out_dur + in_dur
-                    conns_penalty = (out_conns + in_conns) * float(scoring.connection_penalty_eur)
-
-                    adjusted = (
-                        float(price)
-                        + time_value_cost(total_dur, scoring)
-                        + early_departure_penalty(out_dep, scoring)
-                        + early_departure_penalty(in_dep, scoring)
-                        + late_arrival_penalty(out_arr, scoring)
-                        + late_arrival_penalty(in_arr, scoring)
-                        + conns_penalty
-                        + float(ground_extra_eur)
+                pair_rows.append(
+                    RankedRow(
+                        origin=origin,
+                        destination=destination,
+                        out_dep=out_dep,
+                        out_arr=out_arr,
+                        in_dep=in_dep,
+                        in_arr=in_arr,
+                        total_duration_min=total_dur,
+                        price_eur=price,
+                        adjusted_cost=adjusted,
                     )
+                )
+        return pair_rows
 
-                    rows.append(
-                        RankedRow(
-                            origin=origin,
-                            destination=destination,
-                            out_dep=out_dep,
-                            out_arr=out_arr,
-                            in_dep=in_dep,
-                            in_arr=in_arr,
-                            total_duration_min=total_dur,
-                            price_eur=price,
-                            adjusted_cost=adjusted,
-                        )
-                    )
+    tasks = [fetch_pair(d, r) for d in dep_days for r in ret_days if r > d]
+    if not tasks:
+        return []
+    
+    results = await asyncio.gather(*tasks)
+    rows: List[RankedRow] = []
+    for res in results:
+        rows.extend(res)
+
+    rows.sort(key=lambda x: (x.adjusted_cost, x.total_duration_min))
+    return rows
+
+
+async def build_oneway_rows(
+    client: httpx.AsyncClient,
+    api_key: str,
+    origin: str,
+    destination: str,
+    dep_start: date,
+    dep_end: date,
+    currency: str,
+    hl: str,
+    gl: str,
+    deep_search: bool,
+    top_flights: int,
+    min_ticket_price: int,
+    show_hidden: bool,
+    no_cache: bool,
+    scoring: VoliScoringConfig,
+    ground_extra_eur: float,
+) -> List[RankedRow]:
+
+    dep_days = daterange(dep_start, dep_end)
+    serp_stops = "0"
+
+    async def fetch_day(dep_day: date) -> List[RankedRow]:
+        params: Dict[str, Any] = {
+            "engine": "google_flights",
+            "api_key": api_key,
+            "departure_id": origin,
+            "arrival_id": destination,
+            "outbound_date": dep_day.isoformat(),
+            "type": "2",
+            "currency": currency,
+            "hl": hl,
+            "gl": gl,
+            "stops": serp_stops,
+            "sort_by": "2",
+        }
+        if deep_search:
+            params["deep_search"] = "true"
+        apply_serpapi_extras(params, show_hidden=show_hidden, no_cache=no_cache)
+
+        try:
+            resp = await serpapi_get_async(client, params)
+        except Exception as e:
+            eprint(f"Errore API {origin}->{destination}: {e}")
+            return []
+
+        day_rows = []
+        items = select_top_items(resp, top_flights)
+
+        for item in items:
+            price = get_price(item)
+            if price is None or price < min_ticket_price:
+                continue
+
+            try:
+                dep, arr = first_last_times(item, dep_day)
+            except Exception:
+                continue
+
+            dur = get_total_duration(item)
+            conns = connections_count(item)
+
+            adjusted = (
+                float(price)
+                + time_value_cost(dur, scoring)
+                + early_departure_penalty(dep, scoring)
+                + late_arrival_penalty(arr, scoring)
+                + (conns * float(scoring.connection_penalty_eur))
+                + float(ground_extra_eur)
+            )
+
+            day_rows.append(
+                RankedRow(
+                    origin=origin,
+                    destination=destination,
+                    out_dep=dep,
+                    out_arr=arr,
+                    in_dep=None,
+                    in_arr=None,
+                    total_duration_min=dur,
+                    price_eur=price,
+                    adjusted_cost=adjusted,
+                )
+            )
+        return day_rows
+
+    tasks = [fetch_day(d) for d in dep_days]
+    if not tasks:
+        return []
+        
+    results = await asyncio.gather(*tasks)
+    rows: List[RankedRow] = []
+    for res in results:
+        rows.extend(res)
+
+    rows.sort(key=lambda x: (x.adjusted_cost, x.total_duration_min))
+    return rows
+
+
+# ---------- multi route runner ----------
+
+def expand_pairs(origins: List[str], destinations: List[str]) -> List[Tuple[str, str]]:
+    out: List[Tuple[str, str]] = []
+    for o in origins:
+        for d in destinations:
+            if o and d and o != d:
+                out.append((o, d))
+    return out
+
+
+async def build_rows_multi(
+    *,
+    client: httpx.AsyncClient,
+    api_key: str,
+    origins: List[str],
+    destinations: List[str],
+    dep_start: date,
+    dep_end: date,
+    ret_rng: Optional[Tuple[date, date]],
+    one_way: bool,
+    currency: str,
+    hl: str,
+    gl: str,
+    deep_search: bool,
+    top_outbounds: int,
+    top_returns: int,
+    top_flights: int,
+    min_ticket_price: int,
+    show_hidden: bool,
+    no_cache: bool,
+    scoring: VoliScoringConfig,
+) -> List[RankedRow]:
+
+    pairs = expand_pairs(origins, destinations)
+    if not pairs:
+        return []
+
+    tasks = []
+
+    for (o, d) in pairs:
+        extra = airport_transfer_cost(scoring, one_way=one_way or (ret_rng is None), origin=o, destination=d)
+
+        if one_way or ret_rng is None:
+            tasks.append(
+                build_oneway_rows(
+                    client=client,
+                    api_key=api_key,
+                    origin=o,
+                    destination=d,
+                    dep_start=dep_start,
+                    dep_end=dep_end,
+                    currency=currency,
+                    hl=hl,
+                    gl=gl,
+                    deep_search=deep_search,
+                    top_flights=top_flights,
+                    min_ticket_price=min_ticket_price,
+                    show_hidden=show_hidden,
+                    no_cache=no_cache,
+                    scoring=scoring,
+                    ground_extra_eur=extra,
+                )
+            )
+        else:
+            ret_start, ret_end = ret_rng
+            tasks.append(
+                build_roundtrip_rows(
+                    client=client,
+                    api_key=api_key,
+                    origin=o,
+                    destination=d,
+                    dep_start=dep_start,
+                    dep_end=dep_end,
+                    ret_start=ret_start,
+                    ret_end=ret_end,
+                    currency=currency,
+                    hl=hl,
+                    gl=gl,
+                    deep_search=deep_search,
+                    top_outbounds=top_outbounds,
+                    top_returns=top_returns,
+                    min_ticket_price=min_ticket_price,
+                    show_hidden=show_hidden,
+                    no_cache=no_cache,
+                    scoring=scoring,
+                    ground_extra_eur=extra,
+                )
+            )
+
+    results = await asyncio.gather(*tasks)
+    rows: List[RankedRow] = []
+    for res in results:
+        rows.extend(res)
 
     rows.sort(key=lambda x: (x.adjusted_cost, x.total_duration_min))
     return rows
