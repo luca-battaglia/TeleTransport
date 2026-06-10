@@ -747,15 +747,27 @@ async def search_ranked_solutions(
 ) -> List[RankedSolution]:
     sniff_log: List[Dict[str, Any]] = []
 
-    async with async_playwright() as p:
+    _pw = None
+    _browser = None
+    _request_ctx = None
+
+    async def get_request_ctx():
+        nonlocal _pw, _browser, _request_ctx
+        if _request_ctx is not None:
+            return _request_ctx
+
+        from playwright.async_api import async_playwright
+        if verbose:
+            eprint("[INIT] Avvio headless browser...")
+        _pw = await async_playwright().start()
         try:
-            browser = await p.chromium.launch(headless=True, channel="chrome")
+            _browser = await _pw.chromium.launch(headless=True, channel="chrome")
         except Exception:
             if verbose:
                 eprint("[WARN] Chrome non trovato, uso Chromium bundled.")
-            browser = await p.chromium.launch(headless=True)
+            _browser = await _pw.chromium.launch(headless=True)
 
-        context = await browser.new_context(
+        context = await _browser.new_context(
             locale="it-IT",
             timezone_id="Europe/Rome",
             user_agent=(
@@ -766,7 +778,6 @@ async def search_ranked_solutions(
 
         page = await context.new_page()
 
-        # Cookie/init: se fallisce, continuiamo comunque (test ha mostrato che spesso funziona comunque).
         if verbose:
             eprint("[INIT] Loading homepage for cookie...")
         try:
@@ -775,8 +786,10 @@ async def search_ranked_solutions(
             if verbose:
                 eprint(f"[WARN] Loading homepage failed ({e}), continuing.")
 
-        request_ctx = context.request
+        _request_ctx = context.request
+        return _request_ctx
 
+    try:
         async def _post_json(url: str, payload: Dict[str, Any]) -> Any:
             from core.cache import app_cache, generate_cache_key
             
@@ -786,8 +799,9 @@ async def search_ranked_solutions(
                 if cached is not None:
                     return cached
 
+            ctx = await get_request_ctx()
             res = await api_post_json(
-                request_ctx,
+                ctx,
                 url,
                 payload,
                 timeout_ms=api_timeout_ms,
@@ -806,13 +820,25 @@ async def search_ranked_solutions(
             key = _normalize_station_key(station_name)
             if key in loc_cache:
                 return loc_cache[key]
-            locs = await fetch_locations(
-                request_ctx,
-                station_name,
-                limit=50,
-                verbose=verbose,
-                sniff_log=sniff_log if (sniff_out or verbose) else None,
-            )
+
+            from core.cache import app_cache, generate_cache_key
+            from urllib.parse import quote_plus
+            q = quote_plus(station_name)
+            url = f"{LOC_SEARCH_URL}?name={q}&limit=50"
+            
+            cache_key = generate_cache_key("treni_loc", {"url": url})
+            locs = None
+            if not no_cache:
+                locs = app_cache.get(cache_key)
+
+            if locs is None:
+                ctx = await get_request_ctx()
+                locs = await api_get_json(ctx, url, verbose=verbose, sniff_log=sniff_log if (sniff_out or verbose) else None)
+                if not isinstance(locs, list):
+                    locs = []
+                if not no_cache:
+                    app_cache.set(cache_key, locs, expire=86400)
+                    
             loc_id = pick_location_id(station_name, locs)
             loc_cache[key] = loc_id
             if verbose:
@@ -965,14 +991,18 @@ async def search_ranked_solutions(
             ranked.extend(res)
 
 
-        await browser.close()
+    finally:
+        if _browser:
+            await _browser.close()
+        if _pw:
+            await _pw.stop()
 
-        if sniff_out:
-            try:
-                with open(sniff_out, "w", encoding="utf-8") as f:
-                    json.dump(sniff_log, f, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
+    if sniff_out:
+        try:
+            with open(sniff_out, "w", encoding="utf-8") as f:
+                json.dump(sniff_log, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     ranked.sort(key=lambda x: (x.adjusted_cost, x.duration.total_seconds(), x.dep))
     return ranked
