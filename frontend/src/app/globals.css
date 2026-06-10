@@ -222,3 +222,16 @@ p { color: var(--muted); line-height: 1.6; }
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* DatePicker Vertical Scrollable Customization */
+.react-datepicker {
+  display: flex !important;
+  flex-direction: column;
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.react-datepicker__month-container {
+  float: none !important;
+  width: 100%;
+}

@@ -6,11 +6,15 @@ import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
-import DatePicker from 'react-datepicker';
+import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { it, enUS } from 'date-fns/locale';
+
+registerLocale('it', it as any);
+registerLocale('en', enUS as any);
 
 export default function Dashboard() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<'trains' | 'flights'>('trains');
   
@@ -427,6 +431,8 @@ export default function Dashboard() {
                 <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
                 <DatePicker
                   selectsRange={true}
+                  locale={language === 'it' ? 'it' : 'en'}
+                  monthsShown={3}
                   startDate={depDateRange[0] || undefined}
                   endDate={depDateRange[1] || undefined}
                   onChange={(update: any) => {
@@ -471,6 +477,8 @@ export default function Dashboard() {
                 <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
                 <DatePicker
                   selectsRange={true}
+                  locale={language === 'it' ? 'it' : 'en'}
+                  monthsShown={3}
                   startDate={retDateRange[0] || undefined}
                   endDate={retDateRange[1] || undefined}
                   onChange={(update: any) => {
