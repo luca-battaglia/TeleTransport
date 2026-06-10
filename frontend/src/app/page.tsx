@@ -549,7 +549,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
           <button
             type="button"
             className="btn-outline"
