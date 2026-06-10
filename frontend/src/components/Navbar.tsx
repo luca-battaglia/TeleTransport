@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { Settings, Train, Info } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import GuideModal from './GuideModal';
+import SettingsModal from './SettingsModal';
 import { useLanguage } from '@/lib/i18n';
 
 export default function Navbar() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { t } = useLanguage();
 
   return (
@@ -37,12 +39,13 @@ export default function Navbar() {
           <Info size={22} color="var(--primary)" />
         </button>
 
-        <Link href="/settings" className="btn-outline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', border: 'none', padding: '8px', borderRadius: '50%' }} title={t('settings')}>
-          <Settings size={22} />
-        </Link>
+        <button onClick={() => setIsSettingsOpen(true)} className="btn-outline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', border: 'none', padding: '8px', borderRadius: '50%', background: 'transparent' }} title={t('settings')}>
+          <Settings size={22} color="var(--primary)" />
+        </button>
       </div>
 
       <GuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </nav>
   );
 }

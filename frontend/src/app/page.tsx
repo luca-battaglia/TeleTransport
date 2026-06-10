@@ -28,7 +28,8 @@ export default function Dashboard() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [oneWay, setOneWay] = useState(true);
 
-  const [loading, setLoading] = useState(false);
+  const [trainsLoading, setTrainsLoading] = useState(false);
+  const [flightsLoading, setFlightsLoading] = useState(false);
   const [trainSearched, setTrainSearched] = useState(false);
   const [flightSearched, setFlightSearched] = useState(false);
   const [trainResults, setTrainResults] = useState<any[]>([]);
@@ -37,7 +38,10 @@ export default function Dashboard() {
   const [flightError, setFlightError] = useState<string | null>(null);
   const [reminders, setReminders] = useState<{ key: string, text: string, target?: string }[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const trainsAbortControllerRef = useRef<AbortController | null>(null);
+  const flightsAbortControllerRef = useRef<AbortController | null>(null);
+
+  const loading = mode === 'trains' ? trainsLoading : flightsLoading;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -101,26 +105,35 @@ export default function Dashboard() {
   };
 
   const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setLoading(false);
+    if (mode === 'trains' && trainsAbortControllerRef.current) {
+      trainsAbortControllerRef.current.abort();
+      setTrainsLoading(false);
+    } else if (mode === 'flights' && flightsAbortControllerRef.current) {
+      flightsAbortControllerRef.current.abort();
+      setFlightsLoading(false);
     }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    const isTrains = mode === 'trains';
+    
+    if (isTrains) {
+      if (trainsAbortControllerRef.current) trainsAbortControllerRef.current.abort();
+    } else {
+      if (flightsAbortControllerRef.current) flightsAbortControllerRef.current.abort();
     }
+    
     const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setLoading(true);
-    if (mode === 'trains') {
+    if (isTrains) {
+      trainsAbortControllerRef.current = controller;
+      setTrainsLoading(true);
       setTrainSearched(false);
       setTrainError(null);
       setTrainResults([]);
     } else {
+      flightsAbortControllerRef.current = controller;
+      setFlightsLoading(true);
       setFlightSearched(false);
       setFlightError(null);
       setFlightResults([]);
@@ -139,47 +152,33 @@ export default function Dashboard() {
     const retStartStr = formatDate(retDateRange[0]);
     const retEndStr = formatDate(retDateRange[1]);
 
-    if (!depStartStr) {
-      if (mode === 'trains') setTrainError(t("err_outbound")); else setFlightError(t("err_outbound"));
-      setLoading(false);
-      return;
-    }
+    const failWith = (msg: string) => {
+      if (isTrains) { setTrainError(msg); setTrainsLoading(false); }
+      else { setFlightError(msg); setFlightsLoading(false); }
+    };
 
-    if (!oneWay && !retStartStr) {
-      if (mode === 'trains') setTrainError(t("err_return")); else setFlightError(t("err_return"));
-      setLoading(false);
-      return;
-    }
+    if (!depStartStr) return failWith(t("err_outbound"));
+    if (!oneWay && !retStartStr) return failWith(t("err_return"));
 
     const MAX_RANGE_DAYS = 7;
     const msInDay = 24 * 60 * 60 * 1000;
 
     if (depDateRange[0] && depDateRange[1]) {
       const diff = (depDateRange[1].getTime() - depDateRange[0].getTime()) / msInDay;
-      if (diff > MAX_RANGE_DAYS) {
-        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
-        setLoading(false);
-        return;
-      }
+      if (diff > MAX_RANGE_DAYS) return failWith(t("err_max_range"));
     }
 
     if (!oneWay && retDateRange[0] && retDateRange[1]) {
       const diff = (retDateRange[1].getTime() - retDateRange[0].getTime()) / msInDay;
-      if (diff > MAX_RANGE_DAYS) {
-        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
-        setLoading(false);
-        return;
-      }
+      if (diff > MAX_RANGE_DAYS) return failWith(t("err_max_range"));
     }
 
-    if (mode === 'flights') {
+    if (!isTrains) {
       try {
         const localData = localStorage.getItem('teletransport_settings');
         const parsedLocal = localData ? JSON.parse(localData) : {};
         if (!parsedLocal.serpapiKey) {
-          setFlightError(t("err_api_key"));
-          setLoading(false);
-          return;
+          return failWith(t("err_api_key"));
         }
       } catch (e) { }
     }
@@ -195,11 +194,11 @@ export default function Dashboard() {
         one_way: oneWay
       };
 
-      const res = mode === 'trains'
+      const res = isTrains
         ? await fetchTrains(payload, controller.signal)
         : await fetchFlights(payload, controller.signal);
 
-      if (mode === 'trains') {
+      if (isTrains) {
         setTrainResults(res.data || []);
         setTrainSearched(true);
       } else {
@@ -208,7 +207,7 @@ export default function Dashboard() {
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
-      if (mode === 'trains') {
+      if (isTrains) {
         setTrainError(err.message || t("err_generic"));
         setTrainSearched(true);
       } else {
@@ -216,8 +215,10 @@ export default function Dashboard() {
         setFlightSearched(true);
       }
     } finally {
-      if (abortControllerRef.current === controller) {
-        setLoading(false);
+      if (isTrains && trainsAbortControllerRef.current === controller) {
+        setTrainsLoading(false);
+      } else if (!isTrains && flightsAbortControllerRef.current === controller) {
+        setFlightsLoading(false);
       }
     }
   };
