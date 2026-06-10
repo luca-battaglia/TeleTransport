@@ -429,7 +429,12 @@ export default function Dashboard() {
                   selectsRange={true}
                   startDate={depDateRange[0] || undefined}
                   endDate={depDateRange[1] || undefined}
-                  onChange={(update: [Date | null, Date | null]) => {
+                  onChange={(update: any) => {
+                    if (!update) {
+                      setDepDateRange([null, null]);
+                      setDepDatePristine(false);
+                      return;
+                    }
                     if (depDatePristine && update[0] && update[1]) {
                       setDepDateRange([update[1], null]);
                     } else {
@@ -468,7 +473,13 @@ export default function Dashboard() {
                   selectsRange={true}
                   startDate={retDateRange[0] || undefined}
                   endDate={retDateRange[1] || undefined}
-                  onChange={(update: [Date | null, Date | null]) => setRetDateRange(update)}
+                  onChange={(update: any) => {
+                    if (!update) {
+                      setRetDateRange([null, null]);
+                      return;
+                    }
+                    setRetDateRange(update);
+                  }}
                   dateFormat="dd/MM/yyyy"
                   placeholderText={t("return_placeholder")}
                   className="w-full pl-8"
