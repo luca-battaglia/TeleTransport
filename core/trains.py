@@ -795,14 +795,14 @@ async def search_ranked_solutions(
         return _request_ctx
 
     try:
-        async def _post_json(url: str, payload: Dict[str, Any]) -> Any:
+        async def _post_json(url: str, payload: Dict[str, Any]) -> Tuple[Any, bool, str]:
             from core.cache import app_cache, generate_cache_key
             
             cache_key = generate_cache_key("treni_api", {"url": url, "payload": payload})
             if not no_cache:
                 cached = app_cache.get(cache_key)
                 if cached is not None:
-                    return cached
+                    return cached, True, cache_key
 
             ctx = await get_request_ctx()
             res = await api_post_json(
@@ -814,10 +814,7 @@ async def search_ranked_solutions(
                 verbose=verbose,
                 sniff_log=sniff_log if (sniff_out or verbose) else None,
             )
-            
-            if not no_cache:
-                app_cache.set(cache_key, res, expire=1800)
-            return res
+            return res, False, cache_key
 
         loc_cache: Dict[str, int] = {}
 
@@ -891,18 +888,21 @@ async def search_ranked_solutions(
                         "advancedSearchRequest": {"bestFare": False},
                     }
 
-                    data = await _post_json(SOLUTIONS_URL, payload)
+                    data, is_cached, cache_key = await _post_json(SOLUTIONS_URL, payload)
                     sols = data.get("solutions") if isinstance(data, dict) else []
                     if not isinstance(sols, list):
                         sols = []
 
                     if not sols:
-                        if empty_tries < poll_empty_retries:
+                        if not is_cached and empty_tries < poll_empty_retries:
                             empty_tries += 1
                             if verbose:
                                 eprint(f"[POLL] empty page day={day} offset={offset} try {empty_tries}")
                             await asyncio.sleep(_jitter_sleep(poll_sleep_base, factor=empty_tries))
                             continue
+                        if not is_cached and not no_cache:
+                            from core.cache import app_cache
+                            app_cache.set(cache_key, data, expire=1800)
                         break
 
                     empty_tries = 0
@@ -955,24 +955,34 @@ async def search_ranked_solutions(
                             break
 
                     if passed_day:
+                        if not is_cached and not no_cache:
+                            from core.cache import app_cache
+                            app_cache.set(cache_key, data, expire=1800)
                         break
 
                     # se la pagina è tutta duplicata, aspetta un attimo e riprova (endpoint talvolta “ripete”)
                     if unique_in_call == 0:
-                        if dup_tries < poll_dup_retries:
+                        if not is_cached and dup_tries < poll_dup_retries:
                             dup_tries += 1
                             if verbose:
                                 eprint(f"[POLL] dup-only day={day} offset={offset} try {dup_tries}")
                             await asyncio.sleep(_jitter_sleep(poll_sleep_base, factor=dup_tries))
                             continue
+                        if not is_cached and not no_cache:
+                            from core.cache import app_cache
+                            app_cache.set(cache_key, data, expire=1800)
                         break
 
                     # se abbiamo “unici” ma non abbiamo aggiunto nulla, aumentiamo comunque offset per progredire
                     dup_tries = 0
                     offset += returned
+                    
+                    if not is_cached and not no_cache:
+                        from core.cache import app_cache
+                        app_cache.set(cache_key, data, expire=1800)
 
                     # micro-throttle quando stiamo facendo molte chiamate in rapida sequenza
-                    if added_in_call == 0 and (empty_tries == 0):
+                    if not is_cached and added_in_call == 0 and (empty_tries == 0):
                         await asyncio.sleep(_jitter_sleep(0.12, factor=1.0))
                 if scanned >= scan_cap and verbose:
                     eprint(f"[WARN] scan cap reached day={day} route={route_label}")
