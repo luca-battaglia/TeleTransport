@@ -4,45 +4,36 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, Clock } from 'lucide-react';
+import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { it, enUS } from 'date-fns/locale';
-import HistoryModal, { HistoryEntry } from '@/components/HistoryModal';
 
 export default function Dashboard() {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<'trains' | 'flights'>('trains');
-
+  
   const [appConfig, setAppConfig] = useState<any>(null);
   const appConfigRef = useRef<any>(null);
-  const [origin, setOrigin] = useState('');
-  const [destination, setDestination] = useState('');
+  const [origins, setOrigins] = useState<string[]>(['']);
+  const [destinations, setDestinations] = useState<string[]>(['']);
   const [depDateRange, setDepDateRange] = useState<[Date | null, Date | null]>([new Date(), null]);
   const [depDatePristine, setDepDatePristine] = useState(true);
   const [retDateRange, setRetDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [oneWay, setOneWay] = useState(true);
-
-  const [trainsLoading, setTrainsLoading] = useState(false);
-  const [flightsLoading, setFlightsLoading] = useState(false);
+  
+  const [loading, setLoading] = useState(false);
   const [trainSearched, setTrainSearched] = useState(false);
   const [flightSearched, setFlightSearched] = useState(false);
   const [trainResults, setTrainResults] = useState<any[]>([]);
   const [flightResults, setFlightResults] = useState<any[]>([]);
   const [trainError, setTrainError] = useState<string | null>(null);
   const [flightError, setFlightError] = useState<string | null>(null);
-  const [reminders, setReminders] = useState<{ key: string, text: string, target?: string }[]>([]);
+  const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
-  const trainsAbortControllerRef = useRef<AbortController | null>(null);
-  const flightsAbortControllerRef = useRef<AbortController | null>(null);
-  const [trainHistory, setTrainHistory] = useState<HistoryEntry[]>([]);
-  const [flightHistory, setFlightHistory] = useState<HistoryEntry[]>([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-
-  const loading = mode === 'trains' ? trainsLoading : flightsLoading;
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -52,24 +43,24 @@ export default function Dashboard() {
       if (e.altKey && e.key === '1') {
         setMode('trains');
         const cfg = appConfigRef.current?.treni || {};
-        setOrigin(cfg.default_origin || 'Zurigo HB');
-        setDestination(cfg.default_destination || 'Alessandria');
+        setOrigins([cfg.default_origin || 'Zurigo HB']);
+        setDestinations([cfg.default_destination || 'Alessandria']);
       }
       if (e.altKey && e.key === '2') {
         setMode('flights');
         const cfg = appConfigRef.current?.voli || {};
-        setOrigin(cfg.default_origin || 'Zurigo');
-        setDestination(cfg.default_destination || 'Bari');
+        setOrigins([cfg.default_origin || 'Zurigo']);
+        setDestinations([cfg.default_destination || 'Bari']);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleCopyTable = () => {
+    const handleCopyTable = () => {
     const res = mode === 'trains' ? trainResults : flightResults;
     if (res.length === 0) return;
-
+    
     let text = "| Route | Departure | Arrival | Duration | Price | Adj Cost |\n";
     text += "|---|---|---|---|---|---|\n";
     res.slice(0, itemsPerPage).forEach(r => {
@@ -84,7 +75,7 @@ export default function Dashboard() {
       const adj = `${r.adjusted_cost || 0} €`;
       text += `| ${route} | ${dep} | ${arr} | ${dur} | ${price} | ${adj} |\n`;
     });
-
+    
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).catch(err => console.error("Clipboard error", err));
     } else {
@@ -106,35 +97,26 @@ export default function Dashboard() {
   };
 
   const handleStop = () => {
-    if (mode === 'trains' && trainsAbortControllerRef.current) {
-      trainsAbortControllerRef.current.abort();
-      setTrainsLoading(false);
-    } else if (mode === 'flights' && flightsAbortControllerRef.current) {
-      flightsAbortControllerRef.current.abort();
-      setFlightsLoading(false);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setLoading(false);
     }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isTrains = mode === 'trains';
-    
-    if (isTrains) {
-      if (trainsAbortControllerRef.current) trainsAbortControllerRef.current.abort();
-    } else {
-      if (flightsAbortControllerRef.current) flightsAbortControllerRef.current.abort();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
-    
     const controller = new AbortController();
-    if (isTrains) {
-      trainsAbortControllerRef.current = controller;
-      setTrainsLoading(true);
+    abortControllerRef.current = controller;
+
+    setLoading(true);
+    if (mode === 'trains') {
       setTrainSearched(false);
       setTrainError(null);
       setTrainResults([]);
     } else {
-      flightsAbortControllerRef.current = controller;
-      setFlightsLoading(true);
       setFlightSearched(false);
       setFlightError(null);
       setFlightResults([]);
@@ -153,41 +135,55 @@ export default function Dashboard() {
     const retStartStr = formatDate(retDateRange[0]);
     const retEndStr = formatDate(retDateRange[1]);
 
-    const failWith = (msg: string) => {
-      if (isTrains) { setTrainError(msg); setTrainsLoading(false); }
-      else { setFlightError(msg); setFlightsLoading(false); }
-    };
-
-    if (!depStartStr) return failWith(t("err_outbound"));
-    if (!oneWay && !retStartStr) return failWith(t("err_return"));
+    if (!depStartStr) {
+      if (mode === 'trains') setTrainError(t("err_outbound")); else setFlightError(t("err_outbound"));
+      setLoading(false);
+      return;
+    }
+    
+    if (!oneWay && !retStartStr) {
+      if (mode === 'trains') setTrainError(t("err_return")); else setFlightError(t("err_return"));
+      setLoading(false);
+      return;
+    }
 
     const MAX_RANGE_DAYS = 7;
     const msInDay = 24 * 60 * 60 * 1000;
-
+    
     if (depDateRange[0] && depDateRange[1]) {
       const diff = (depDateRange[1].getTime() - depDateRange[0].getTime()) / msInDay;
-      if (diff > MAX_RANGE_DAYS) return failWith(t("err_max_range"));
+      if (diff > MAX_RANGE_DAYS) {
+        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
+        setLoading(false);
+        return;
+      }
     }
-
+    
     if (!oneWay && retDateRange[0] && retDateRange[1]) {
       const diff = (retDateRange[1].getTime() - retDateRange[0].getTime()) / msInDay;
-      if (diff > MAX_RANGE_DAYS) return failWith(t("err_max_range"));
+      if (diff > MAX_RANGE_DAYS) {
+        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
+        setLoading(false);
+        return;
+      }
     }
 
-    if (!isTrains) {
+    if (mode === 'flights') {
       try {
         const localData = localStorage.getItem('teletransport_settings');
         const parsedLocal = localData ? JSON.parse(localData) : {};
         if (!parsedLocal.serpapiKey) {
-          return failWith(t("err_api_key"));
+          setFlightError(t("err_api_key"));
+          setLoading(false);
+          return;
         }
-      } catch (e) { }
+      } catch (e) {}
     }
 
     try {
       const payload = {
-        origins: [origin],
-        destinations: [destination],
+        origins: origins.filter(Boolean),
+        destinations: destinations.filter(Boolean),
         dep_start: depStartStr,
         dep_end: depEndStr || depStartStr,
         ret_start: retStartStr || undefined,
@@ -195,40 +191,20 @@ export default function Dashboard() {
         one_way: oneWay
       };
 
-      const res = isTrains
-        ? await fetchTrains(payload, controller.signal)
+      const res = mode === 'trains' 
+        ? await fetchTrains(payload, controller.signal) 
         : await fetchFlights(payload, controller.signal);
-      
-      const newEntry: HistoryEntry = {
-        timestamp: Date.now(),
-        origin, destination, depStartStr,
-        depEndStr: depEndStr || undefined,
-        retStartStr: retStartStr || undefined,
-        retEndStr: retEndStr || undefined,
-        oneWay,
-        results: res.data || []
-      };
-
-      if (isTrains) {
+        
+      if (mode === 'trains') {
         setTrainResults(res.data || []);
         setTrainSearched(true);
-        setTrainHistory(prev => {
-          const updated = [newEntry, ...prev].slice(0, 10);
-          localStorage.setItem('teletransport_history_trains', JSON.stringify(updated));
-          return updated;
-        });
       } else {
         setFlightResults(res.data || []);
         setFlightSearched(true);
-        setFlightHistory(prev => {
-          const updated = [newEntry, ...prev].slice(0, 10);
-          localStorage.setItem('teletransport_history_flights', JSON.stringify(updated));
-          return updated;
-        });
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
-      if (isTrains) {
+      if (mode === 'trains') {
         setTrainError(err.message || t("err_generic"));
         setTrainSearched(true);
       } else {
@@ -236,61 +212,33 @@ export default function Dashboard() {
         setFlightSearched(true);
       }
     } finally {
-      if (isTrains && trainsAbortControllerRef.current === controller) {
-        setTrainsLoading(false);
-      } else if (!isTrains && flightsAbortControllerRef.current === controller) {
-        setFlightsLoading(false);
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
       }
-    }
-  };
-
-  const loadHistoryEntry = (entry: HistoryEntry) => {
-    setOrigin(entry.origin);
-    setDestination(entry.destination);
-    setDepDateRange([new Date(entry.depStartStr), entry.depEndStr ? new Date(entry.depEndStr) : null]);
-    setRetDateRange([entry.retStartStr ? new Date(entry.retStartStr) : null, entry.retEndStr ? new Date(entry.retEndStr) : null]);
-    setDepDatePristine(false);
-    setOneWay(entry.oneWay);
-
-    if (mode === 'trains') {
-      setTrainResults(entry.results);
-      setTrainSearched(true);
-      setTrainError(null);
-    } else {
-      setFlightResults(entry.results);
-      setFlightSearched(true);
-      setFlightError(null);
     }
   };
 
   useEffect(() => {
     try {
-      const histTrains = localStorage.getItem('teletransport_history_trains');
-      if (histTrains) setTrainHistory(JSON.parse(histTrains));
-      const histFlights = localStorage.getItem('teletransport_history_flights');
-      if (histFlights) setFlightHistory(JSON.parse(histFlights));
-    } catch (e) { }
-
-    try {
       const settings = localStorage.getItem('teletransport_settings');
       if (settings) {
         const parsed = JSON.parse(settings);
         if (parsed.reminders) {
-          setReminders(Object.entries(parsed.reminders).map(([k, v]: [string, any]) => {
-            if (typeof v === 'string') return { key: k, text: v, target: 'voli' };
-            return { key: k, text: String(v.text || ''), target: v.target || 'voli' };
-          }));
+           setReminders(Object.entries(parsed.reminders).map(([k, v]: [string, any]) => {
+             if (typeof v === 'string') return { key: k, text: v, target: 'voli' };
+             return { key: k, text: String(v.text || ''), target: v.target || 'voli' };
+           }));
         }
       }
-    } catch (e) { }
+    } catch (e) {}
 
     try {
       const state = sessionStorage.getItem('dashboard_state');
       if (state) {
         const parsed = JSON.parse(state);
         if (parsed.mode) setMode(parsed.mode);
-        if (parsed.origin) setOrigin(parsed.origin);
-        if (parsed.destination) setDestination(parsed.destination);
+        if (parsed.origins) setOrigins(parsed.origins);
+        if (parsed.destinations) setDestinations(parsed.destinations);
         if (parsed.itemsPerPage) setItemsPerPage(parsed.itemsPerPage);
         if (parsed.oneWay !== undefined) setOneWay(parsed.oneWay);
         if (parsed.trainSearched !== undefined) setTrainSearched(parsed.trainSearched);
@@ -299,7 +247,7 @@ export default function Dashboard() {
         if (parsed.flightResults) setFlightResults(parsed.flightResults);
         if (parsed.trainError !== undefined) setTrainError(parsed.trainError);
         if (parsed.flightError !== undefined) setFlightError(parsed.flightError);
-
+        
         if (parsed.depDateRange) {
           setDepDateRange([
             parsed.depDateRange[0] ? new Date(parsed.depDateRange[0]) : null,
@@ -314,7 +262,7 @@ export default function Dashboard() {
           ]);
         }
       }
-    } catch (e) { }
+    } catch (e) {}
 
     fetchConfig().then(baseCfg => {
       let cfg = baseCfg || {};
@@ -330,21 +278,21 @@ export default function Dashboard() {
             };
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       if (Object.keys(cfg).length > 0) {
         setAppConfig(cfg);
         appConfigRef.current = cfg;
         const state = sessionStorage.getItem('dashboard_state');
         if (!state) {
-          setOrigin(cfg.treni?.default_origin || 'Zurigo HB');
-          setDestination(cfg.treni?.default_destination || 'Alessandria');
+          setOrigins([cfg.treni?.default_origin || 'Zurigo HB']);
+          setDestinations([cfg.treni?.default_destination || 'Alessandria']);
         }
       } else {
         const state = sessionStorage.getItem('dashboard_state');
         if (!state) {
-          setOrigin('Zurigo HB');
-          setDestination('Alessandria');
+          setOrigins(['Zurigo HB']);
+          setDestinations(['Alessandria']);
         }
       }
       setMounted(true);
@@ -354,7 +302,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!mounted) return;
     const stateToSave = {
-      mode, origin, destination, itemsPerPage, oneWay,
+      mode, origins, destinations, itemsPerPage, oneWay,
       trainSearched, flightSearched,
       trainResults, flightResults,
       trainError, flightError,
@@ -368,7 +316,7 @@ export default function Dashboard() {
       ]
     };
     sessionStorage.setItem('dashboard_state', JSON.stringify(stateToSave));
-  }, [mounted, mode, origin, destination, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, depDateRange, retDateRange]);
+  }, [mounted, mode, origins, destinations, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, depDateRange, retDateRange]);
 
   if (!mounted) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}><Loader2 className="animate-spin" size={32} /></div>;
@@ -376,33 +324,33 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-
+      
       {/* Type Toggle */}
       <div className="flex justify-center" style={{ marginBottom: '16px' }}>
         <div style={{ display: 'inline-flex', gap: '12px' }}>
-          <button
+          <button 
             type="button"
-            className={mode === 'trains' ? 'btn-primary' : 'btn-outline'}
+            className={mode === 'trains' ? 'btn-primary' : 'btn-outline'} 
             title={`${t("trains_btn")} (Alt+1)`}
-            onClick={() => {
-              setMode('trains');
+            onClick={() => { 
+              setMode('trains'); 
               const cfg = appConfig?.treni || {};
-              setOrigin(cfg.default_origin || 'Zurigo HB');
-              setDestination(cfg.default_destination || 'Alessandria');
+              setOrigins([cfg.default_origin || 'Zurigo HB']); 
+              setDestinations([cfg.default_destination || 'Alessandria']); 
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === 'trains' ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
           >
             <Train size={18} /> {t("trains_btn")}
           </button>
-          <button
+          <button 
             type="button"
-            className={mode === 'flights' ? 'btn-primary' : 'btn-outline'}
+            className={mode === 'flights' ? 'btn-primary' : 'btn-outline'} 
             title={`${t("flights_btn")} (Alt+2)`}
-            onClick={() => {
-              setMode('flights');
+            onClick={() => { 
+              setMode('flights'); 
               const cfg = appConfig?.voli || {};
-              setOrigin(cfg.default_origin || 'Zurigo');
-              setDestination(cfg.default_destination || 'Bari');
+              setOrigins([cfg.default_origin || 'Zurigo']); 
+              setDestinations([cfg.default_destination || 'Bari']); 
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === 'flights' ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
           >
@@ -412,9 +360,9 @@ export default function Dashboard() {
       </div>
 
       {(() => {
-        const activeReminders = reminders.filter(r =>
-          r.target === 'both' ||
-          (mode === 'flights' && r.target === 'voli') ||
+        const activeReminders = reminders.filter(r => 
+          r.target === 'both' || 
+          (mode === 'flights' && r.target === 'voli') || 
           (mode === 'trains' && r.target === 'treni')
         );
         if (activeReminders.length === 0) return null;
@@ -431,45 +379,92 @@ export default function Dashboard() {
       })()}
 
       {/* Search Form */}
-      <motion.form
+      <motion.form 
         ref={formRef}
-        onSubmit={handleSearch}
-        className="glass-panel"
+        onSubmit={handleSearch} 
+        className="glass-panel" 
         style={{ padding: '32px' }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', gridColumn: '1 / -1' }}>
-            <div style={{ flex: 1 }}>
-              <AutocompleteInput
-                label={t("origin")}
-                value={origin}
-                onChange={setOrigin}
-                options={t(mode === 'trains' ? 'options_trains' : 'options_flights').split(',')}
-                placeholder={mode === 'trains' ? t("origin_placeholder_train") : t("origin_placeholder_flight")}
-              />
-            </div>
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={() => {
-                setOrigin(destination);
-                setDestination(origin);
-              }}
-              style={{ padding: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}
-              title={t("swap_btn")}
-            >
-              <ArrowLeftRight size={18} />
-            </button>
-            <div style={{ flex: 1 }}>
-              <AutocompleteInput
-                label={t("destination")}
-                value={destination}
-                onChange={setDestination}
-                options={t(mode === 'trains' ? 'options_trains' : 'options_flights').split(',')}
-                placeholder={mode === 'trains' ? t("dest_placeholder_train") : t("dest_placeholder_flight")}
-              />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: '1 / -1' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' }}>
+              <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {origins.map((orig, idx) => (
+                  <div key={`orig-${idx}`} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1 }}>
+                      <AutocompleteInput 
+                        label={idx === 0 ? t("origin") : `${t("origin")} ${idx + 1}`}
+                        value={orig}
+                        onChange={(val) => {
+                          const newOrigins = [...origins];
+                          newOrigins[idx] = val;
+                          setOrigins(newOrigins);
+                        }}
+                        options={mode === 'trains' ? (appConfig?.treni?.options || []) : (appConfig?.voli?.options || [])}
+                        placeholder={mode === 'trains' ? t("origin_placeholder_train") : t("origin_placeholder_flight")}
+                      />
+                    </div>
+                    {origins.length > 1 && (
+                      <button type="button" className="btn-outline" onClick={() => setOrigins(origins.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Rimuovi">
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {origins.length < 5 && (
+                  <button type="button" className="btn-outline" onClick={() => setOrigins([...origins, ''])} style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Plus size={14} /> Aggiungi origine
+                  </button>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 0' }}>
+                <button 
+                  type="button" 
+                  className="btn-outline"
+                  onClick={() => {
+                    const temp = [...origins];
+                    setOrigins(destinations);
+                    setDestinations(temp);
+                  }}
+                  style={{ padding: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  title={t("swap_btn")}
+                >
+                  <ArrowLeftRight size={18} />
+                </button>
+              </div>
+
+              <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {destinations.map((dest, idx) => (
+                  <div key={`dest-${idx}`} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1 }}>
+                      <AutocompleteInput 
+                        label={idx === 0 ? t("destination") : `${t("destination")} ${idx + 1}`}
+                        value={dest}
+                        onChange={(val) => {
+                          const newDests = [...destinations];
+                          newDests[idx] = val;
+                          setDestinations(newDests);
+                        }}
+                        options={mode === 'trains' ? (appConfig?.treni?.options || []) : (appConfig?.voli?.options || [])}
+                        placeholder={mode === 'trains' ? t("dest_placeholder_train") : t("dest_placeholder_flight")}
+                      />
+                    </div>
+                    {destinations.length > 1 && (
+                      <button type="button" className="btn-outline" onClick={() => setDestinations(destinations.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Rimuovi">
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {destinations.length < 5 && (
+                  <button type="button" className="btn-outline" onClick={() => setDestinations([...destinations, ''])} style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Plus size={14} /> Aggiungi destinazione
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -479,16 +474,9 @@ export default function Dashboard() {
                 <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
                 <DatePicker
                   selectsRange={true}
-                  locale={language === 'it' ? 'it' : 'en'}
-                  monthsShown={3}
                   startDate={depDateRange[0] || undefined}
                   endDate={depDateRange[1] || undefined}
-                  onChange={(update: any) => {
-                    if (!update) {
-                      setDepDateRange([null, null]);
-                      setDepDatePristine(false);
-                      return;
-                    }
+                  onChange={(update: [Date | null, Date | null]) => {
                     if (depDatePristine && update[0] && update[1]) {
                       setDepDateRange([update[1], null]);
                     } else {
@@ -506,13 +494,13 @@ export default function Dashboard() {
               <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>(Inizio - Fine)</div>
             </div>
           </div>
-
+          
           <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
               <label className="form-label" style={{ marginBottom: 0 }}>{t("return_range")}</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
+                <input 
+                  type="checkbox" 
                   checked={!oneWay}
                   onChange={e => setOneWay(!e.target.checked)}
                   style={{ width: 'auto', cursor: 'pointer' }}
@@ -525,17 +513,9 @@ export default function Dashboard() {
                 <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
                 <DatePicker
                   selectsRange={true}
-                  locale={language === 'it' ? 'it' : 'en'}
-                  monthsShown={3}
                   startDate={retDateRange[0] || undefined}
                   endDate={retDateRange[1] || undefined}
-                  onChange={(update: any) => {
-                    if (!update) {
-                      setRetDateRange([null, null]);
-                      return;
-                    }
-                    setRetDateRange(update);
-                  }}
+                  onChange={(update: [Date | null, Date | null]) => setRetDateRange(update)}
                   dateFormat="dd/MM/yyyy"
                   placeholderText={t("return_placeholder")}
                   className="w-full pl-8"
@@ -549,9 +529,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
-          <button
-            type="button"
+        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+          <button 
+            type="button" 
             className="btn-outline"
             onClick={() => {
               if (mode === 'trains') {
@@ -570,16 +550,16 @@ export default function Dashboard() {
                   }
                   return n;
                 };
-                const o = mapIata(origin);
-                const d = mapIata(destination);
-
+                const o = mapIata(origins[0] || '');
+                const d = mapIata(destinations[0] || '');
+                
                 const formatDate = (date: Date | null) => {
                   if (!date) return '';
                   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                 };
                 const depStr = formatDate(depDateRange[0]);
                 const retStr = formatDate(retDateRange[0]);
-
+                
                 let url = `https://www.google.com/travel/flights?q=Flights%20to%20${d}%20from%20${o}%20on%20${depStr}`;
                 if (!oneWay && retStr) {
                   url += `%20through%20${retStr}`;
@@ -593,26 +573,13 @@ export default function Dashboard() {
           >
             {mode === 'trains' ? t("open_trenitalia") : t("open_google_flights")}
           </button>
-
-          <button
-            type="button"
-            className="btn-outline"
-            onClick={() => setIsHistoryOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px', gap: '8px' }}
-            title={language === 'it' ? 'Cronologia' : 'History'}
-          >
-            <Clock size={16} />
-            <span style={{ display: 'none', '@media (min-width: 600px)': { display: 'inline' } } as any}>
-              {language === 'it' ? 'Cronologia' : 'History'}
-            </span>
-          </button>
-
+          
           <button type="submit" className="btn-primary" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
             {loading ? t("searching") : t("search_solutions")}
           </button>
           {loading && (
-            <div
+            <div 
               onClick={handleStop}
               title={t("stop_search")}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '8px', color: 'var(--primary)' }}
@@ -638,12 +605,12 @@ export default function Dashboard() {
 
       <AnimatePresence>
         {(mode === 'trains' ? trainResults : flightResults).length > 0 && (
-          <motion.div
+          <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-              <button
+              <button 
                 type="button"
                 className="btn-outline"
                 onClick={handleCopyTable}
@@ -654,35 +621,35 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t("route")}</th>
-                    <th>{t("departure")}</th>
-                    <th>{t("arrival")}</th>
-                    <th>{t("duration")}</th>
-                    <th>{t("price")}</th>
-                    <th>{t("adj_cost")}</th>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t("route")}</th>
+                  <th>{t("departure")}</th>
+                  <th>{t("arrival")}</th>
+                  <th>{t("duration")}</th>
+                  <th>{t("price")}</th>
+                  <th>{t("adj_cost")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(mode === 'trains' ? trainResults : flightResults).slice(0, itemsPerPage).map((r, i) => (
+                  <tr key={i}>
+                    <td>
+                      <span style={{ fontWeight: 500 }}>
+                        {r.route || `${r.origin} → ${r.destination}`}
+                      </span>
+                      {!oneWay && r.in_dep && <div style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>{t("return_label")}: {r.destination} → {r.origin}</div>}
+                    </td>
+                    <td>{new Date(r.out_dep || r.dep).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>{new Date(r.out_arr || r.arr).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>{Math.floor((r.duration_min || r.total_duration_min) / 60)}h {(r.duration_min || r.total_duration_min) % 60}m</td>
+                    <td style={{ fontWeight: 600 }}>{r.price_eur} €</td>
+                    <td style={{ color: 'var(--accent)' }}>{r.adjusted_cost} €</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {(mode === 'trains' ? trainResults : flightResults).slice(0, itemsPerPage).map((r, i) => (
-                    <tr key={i}>
-                      <td>
-                        <span style={{ fontWeight: 500 }}>
-                          {r.route || `${r.origin} → ${r.destination}`}
-                        </span>
-                        {!oneWay && r.in_dep && <div style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>{t("return_label")}: {r.destination} → {r.origin}</div>}
-                      </td>
-                      <td>{new Date(r.out_dep || r.dep).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                      <td>{new Date(r.out_arr || r.arr).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                      <td>{Math.floor((r.duration_min || r.total_duration_min) / 60)}h {(r.duration_min || r.total_duration_min) % 60}m</td>
-                      <td style={{ fontWeight: 600 }}>{r.price_eur} €</td>
-                      <td style={{ color: 'var(--accent)' }}>{r.adjusted_cost} €</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </tbody>
+            </table>
             </div>
           </motion.div>
         )}
@@ -691,8 +658,8 @@ export default function Dashboard() {
       {(mode === 'trains' ? trainResults : flightResults).length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
           <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{t("results_to_show")}</span>
-          <select
-            value={itemsPerPage}
+          <select 
+            value={itemsPerPage} 
             onChange={e => setItemsPerPage(Number(e.target.value))}
             style={{ width: '80px', padding: '6px 10px', background: 'var(--card-bg)' }}
           >
@@ -704,14 +671,7 @@ export default function Dashboard() {
           </select>
         </div>
       )}
-
-      <HistoryModal
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        mode={mode}
-        history={mode === 'trains' ? trainHistory : flightHistory}
-        onSelect={loadHistoryEntry}
-      />
+      
     </div>
   );
 }
