@@ -402,7 +402,7 @@ export default function Dashboard() {
                           newOrigins[idx] = val;
                           setOrigins(newOrigins);
                         }}
-                        options={mode === 'trains' ? (appConfig?.treni?.options || []) : (appConfig?.voli?.options || [])}
+                        options={t(mode === 'trains' ? 'options_trains' : 'options_flights').split(',')}
                         placeholder={mode === 'trains' ? t("origin_placeholder_train") : t("origin_placeholder_flight")}
                       />
                     </div>
@@ -448,7 +448,7 @@ export default function Dashboard() {
                           newDests[idx] = val;
                           setDestinations(newDests);
                         }}
-                        options={mode === 'trains' ? (appConfig?.treni?.options || []) : (appConfig?.voli?.options || [])}
+                        options={t(mode === 'trains' ? 'options_trains' : 'options_flights').split(',')}
                         placeholder={mode === 'trains' ? t("dest_placeholder_train") : t("dest_placeholder_flight")}
                       />
                     </div>
