@@ -45,9 +45,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [uiVoliOptions, setUiVoliOptions] = useState('');
   const [uiIataMapping, setUiIataMapping] = useState('');
 
-  const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([
-    {key: 'booking', text: '!!! RICORDATI DI USARE IL BONUS DI 15€ SU BOOKING.COM !!!', target: 'voli'}
-  ]);
+  const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([]);
 
   const [airportExtras, setAirportExtras] = useState<{iata: string, fuel_eur: string, personal_drive_hours: string, companions_drive_hours: string}[]>([
     {iata: 'BDS', fuel_eur: '30.0', personal_drive_hours: '1.5', companions_drive_hours: '3.0'}
