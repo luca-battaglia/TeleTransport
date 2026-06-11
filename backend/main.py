@@ -221,9 +221,10 @@ async def get_flights(
         ui_cfg = cfg_dict.get("ui", {}).get("flights", {})
         mapping = ui_cfg.get("iata_mapping", {
             "zurigo": "ZRH", "zurich": "ZRH", "bari": "BRI", "brindisi": "BDS",
-            "torino": "TRN", "milan": "MIL", "roma": "ROM", "rome": "ROM",
-            "napol": "NAP", "naples": "NAP", "catania": "CTA", "palermo": "PMO",
-            "venezia": "VCE", "venice": "VCE", "bologna": "BLQ"
+            "torino": "TRN", "linate": "LIN", "malpensa": "MXP", "milan": "MIL",
+            "roma": "ROM", "rome": "ROM", "napol": "NAP", "naples": "NAP",
+            "catania": "CTA", "palermo": "PMO", "venezia": "VCE", "venice": "VCE",
+            "bologna": "BLQ"
         })
         for key, iata in mapping.items():
             if key in n:

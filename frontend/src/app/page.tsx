@@ -541,9 +541,10 @@ export default function Dashboard() {
                   n = n.toLowerCase();
                   const mapping = appConfig?.voli?.iata_mapping || {
                     "zurigo": "ZRH", "zurich": "ZRH", "bari": "BRI", "brindisi": "BDS",
-                    "torino": "TRN", "milan": "MIL", "roma": "ROM", "rome": "ROM",
-                    "napol": "NAP", "naples": "NAP", "catania": "CTA", "palermo": "PMO",
-                    "venezia": "VCE", "venice": "VCE", "bologna": "BLQ"
+                    "torino": "TRN", "linate": "LIN", "malpensa": "MXP", "milan": "MIL",
+                    "roma": "ROM", "rome": "ROM", "napol": "NAP", "naples": "NAP",
+                    "catania": "CTA", "palermo": "PMO", "venezia": "VCE", "venice": "VCE",
+                    "bologna": "BLQ"
                   };
                   for (const key in mapping) {
                     if (n.includes(key)) return mapping[key];
