@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus } from 'lucide-react';
+import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [retDateRange, setRetDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [oneWay, setOneWay] = useState(true);
+  const [savedSearches, setSavedSearches] = useState<{trains: {origins: string[], destinations: string[]}[], flights: {origins: string[], destinations: string[]}[]}>({ trains: [], flights: [] });
   
   const [loading, setLoading] = useState(false);
   const [trainSearched, setTrainSearched] = useState(false);
@@ -233,6 +234,13 @@ export default function Dashboard() {
     } catch (e) {}
 
     try {
+      const localSaved = localStorage.getItem('teletransport_saved_searches');
+      if (localSaved) {
+        setSavedSearches(JSON.parse(localSaved));
+      }
+    } catch (e) {}
+
+    try {
       const state = sessionStorage.getItem('dashboard_state');
       if (state) {
         const parsed = JSON.parse(state);
@@ -298,6 +306,38 @@ export default function Dashboard() {
       setMounted(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem('teletransport_saved_searches', JSON.stringify(savedSearches));
+  }, [savedSearches, mounted]);
+
+  const handleSaveSearch = () => {
+    const current = savedSearches[mode] || [];
+    const cleanOrigins = origins.filter(o => o.trim());
+    const cleanDestinations = destinations.filter(d => d.trim());
+    if (cleanOrigins.length === 0 || cleanDestinations.length === 0) return;
+
+    const isDuplicate = current.some(s => 
+      JSON.stringify(s.origins) === JSON.stringify(cleanOrigins) && 
+      JSON.stringify(s.destinations) === JSON.stringify(cleanDestinations)
+    );
+
+    if (isDuplicate) return;
+
+    const newSaved = [...current, { origins: cleanOrigins, destinations: cleanDestinations }];
+    if (newSaved.length > 10) newSaved.shift();
+
+    setSavedSearches(prev => ({ ...prev, [mode]: newSaved }));
+  };
+
+  const removeSavedSearch = (idx: number) => {
+    setSavedSearches(prev => {
+      const newMode = [...prev[mode]];
+      newMode.splice(idx, 1);
+      return { ...prev, [mode]: newMode };
+    });
+  };
 
   useEffect(() => {
     if (!mounted) return;
@@ -388,6 +428,22 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          {savedSearches[mode] && savedSearches[mode].length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', gridColumn: '1 / -1' }}>
+              {savedSearches[mode].map((s, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => { setOrigins(s.origins); setDestinations(s.destinations); }} 
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'var(--card-bg)', border: '1px solid var(--card-border)', padding: '6px 12px', borderRadius: '16px', fontSize: '13px', transition: 'all 0.2s' }}
+                >
+                  <span>{s.origins.join(', ')} <ArrowLeftRight size={12} style={{display: 'inline', margin: '0 4px'}} /> {s.destinations.join(', ')}</span>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); removeSavedSearch(i); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '0', display: 'flex', marginLeft: '4px' }} title="Rimuovi">
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: '1 / -1' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' }}>
               <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -529,7 +585,17 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+          <button 
+            type="button" 
+            className="btn-outline"
+            onClick={handleSaveSearch}
+            title="Salva destinazioni"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Bookmark size={16} /> Salva
+          </button>
+          
           <button 
             type="button" 
             className="btn-outline"
