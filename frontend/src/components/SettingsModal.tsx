@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Save, X } from 'lucide-react';
+import { Save, X, Download, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
@@ -237,6 +237,66 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleExport = () => {
+    try {
+      const settings = localStorage.getItem('teletransport_settings');
+      const searches = localStorage.getItem('teletransport_saved_searches');
+      
+      const exportData = {
+        teletransport_settings: settings ? JSON.parse(settings) : null,
+        teletransport_saved_searches: searches ? JSON.parse(searches) : null
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `teletransport_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export failed', e);
+      alert('Errore durante l\\'esportazione.');
+    }
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const data = JSON.parse(content);
+        
+        let imported = false;
+        if (data.teletransport_settings) {
+          localStorage.setItem('teletransport_settings', JSON.stringify(data.teletransport_settings));
+          imported = true;
+        }
+        if (data.teletransport_saved_searches) {
+          localStorage.setItem('teletransport_saved_searches', JSON.stringify(data.teletransport_saved_searches));
+          imported = true;
+        }
+        
+        if (imported) {
+          alert('Impostazioni importate con successo! La pagina verrà ricaricata per applicare le modifiche.');
+          window.location.reload();
+        } else {
+          alert('Il file non contiene impostazioni valide per TeleTransport.');
+        }
+      } catch (err) {
+        console.error('Import failed', err);
+        alert('File non valido o corrotto.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -416,12 +476,23 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </div>
         </div>
 
-        <div style={{ marginTop: '32px', display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px solid var(--card-border)', paddingTop: '24px' }}>
+        <div style={{ marginTop: '32px', display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px solid var(--card-border)', paddingTop: '24px', flexWrap: 'wrap' }}>
           <button className="btn-primary" onClick={handleSave} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Save size={16} />
             {t("save_settings")}
           </button>
           {saved && <span style={{ color: '#4ade80', fontSize: '14px', fontWeight: 500 }}>{t("saved_local")}</span>}
+
+          <div style={{ flex: 1, minWidth: '20px' }}></div>
+
+          <button className="btn-outline" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Download size={16} /> Esporta
+          </button>
+          
+          <label className="btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
+            <Upload size={16} /> Importa
+            <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+          </label>
         </div>
       </motion.div>
     </div>
