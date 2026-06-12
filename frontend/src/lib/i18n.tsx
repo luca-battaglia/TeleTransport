@@ -118,7 +118,18 @@ const en: Translations = {
   settings_id_placeholder: "ID (e.g., booking)",
   reminder_text_placeholder: "Reminder text",
   options_trains: "Turin (All Stations),Alessandria,Zurich HB,Bari Centrale,Lecce,Milan Central,Rome Termini,Naples Central,Venice S. Lucia,Bologna Central",
-  options_flights: "Zurich,Bari,Brindisi,Turin,Milan Linate,Milan Malpensa,Genoa,Rome,Naples,Catania,Palermo,Venice,Bologna"
+  options_flights: "Zurich,Bari,Brindisi,Turin,Milan Linate,Milan Malpensa,Genoa,Rome,Naples,Catania,Palermo,Venice,Bologna",
+  export_btn: "Export",
+  import_btn: "Import",
+  export_error: "Error during export.",
+  import_success: "Settings imported successfully! The page will reload to apply changes.",
+  import_invalid: "The file does not contain valid settings for TeleTransport.",
+  import_corrupted: "Invalid or corrupted file.",
+  start_end: "(Start - End)",
+  save_destinations: "Save destinations",
+  save_btn: "Save",
+  add_origin: "Add origin",
+  add_dest: "Add destination"
 };
 
 const it: Translations = {
@@ -231,7 +242,18 @@ const it: Translations = {
   settings_id_placeholder: "ID (es. booking)",
   reminder_text_placeholder: "Testo del promemoria",
   options_trains: "Torino ( Tutte Le Stazioni ),Alessandria,Zurigo HB,Bari Centrale,Lecce,Milano Centrale,Roma Termini,Napoli Centrale,Venezia S. Lucia,Bologna Centrale",
-  options_flights: "Zurigo,Bari,Brindisi,Torino,Milano Linate,Milano Malpensa,Genova,Roma,Napoli,Catania,Palermo,Venezia,Bologna"
+  options_flights: "Zurigo,Bari,Brindisi,Torino,Milano Linate,Milano Malpensa,Genova,Roma,Napoli,Catania,Palermo,Venezia,Bologna",
+  export_btn: "Esporta",
+  import_btn: "Importa",
+  export_error: "Errore durante l'esportazione.",
+  import_success: "Impostazioni importate con successo! La pagina verrà ricaricata per applicare le modifiche.",
+  import_invalid: "Il file non contiene impostazioni valide per TeleTransport.",
+  import_corrupted: "File non valido o corrotto.",
+  start_end: "(Inizio - Fine)",
+  save_destinations: "Salva destinazioni",
+  save_btn: "Salva",
+  add_origin: "Aggiungi origine",
+  add_dest: "Aggiungi destinazione"
 };
 
 const dictionaries = { en, it };

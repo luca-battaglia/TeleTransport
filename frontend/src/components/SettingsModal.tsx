@@ -15,7 +15,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { t, language, setLanguage } = useLanguage();
   const [serpapiKey, setSerpapiKey] = useState('');
   
-  // Treni
+  // Trains
   const [treniTimeValue, setTreniTimeValue] = useState('20.0');
   const [treniEarlyRef, setTreniEarlyRef] = useState('9');
   const [treniEarlyPen, setTreniEarlyPen] = useState('20.0');
@@ -24,7 +24,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [treniLatePen, setTreniLatePen] = useState('15.0');
   const [treniChangePen, setTreniChangePen] = useState('5.0');
 
-  // Voli
+  // Flights
   const [voliTimeValue, setVoliTimeValue] = useState('20.0');
   const [voliEarlyRef, setVoliEarlyRef] = useState('9');
   const [voliEarlyPen, setVoliEarlyPen] = useState('20.0');
@@ -34,12 +34,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [voliConnPen, setVoliConnPen] = useState('5.0');
   const [voliCompanionsTime, setVoliCompanionsTime] = useState('8.0');
 
-  // UI Settings (Treni)
+  // UI Settings (Trains)
   const [uiTreniOrigin, setUiTreniOrigin] = useState('');
   const [uiTreniDest, setUiTreniDest] = useState('');
   const [uiTreniOptions, setUiTreniOptions] = useState('');
 
-  // UI Settings (Voli)
+  // UI Settings (Flights)
   const [uiVoliOrigin, setUiVoliOrigin] = useState('');
   const [uiVoliDest, setUiVoliDest] = useState('');
   const [uiVoliOptions, setUiVoliOptions] = useState('');
@@ -258,7 +258,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error('Export failed', e);
-      alert("Errore durante l'esportazione.");
+      alert(t("export_error"));
     }
   };
 
@@ -283,14 +283,14 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         }
         
         if (imported) {
-          alert('Impostazioni importate con successo! La pagina verrà ricaricata per applicare le modifiche.');
+          alert(t("import_success"));
           window.location.reload();
         } else {
-          alert('Il file non contiene impostazioni valide per TeleTransport.');
+          alert(t("import_invalid"));
         }
       } catch (err) {
         console.error('Import failed', err);
-        alert('File non valido o corrotto.');
+        alert(t("import_corrupted"));
       }
     };
     reader.readAsText(file);
@@ -365,7 +365,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px' }}>
-          {/* TRENI */}
+          {/* TRAINS */}
           <div style={{ flex: '1 1 300px' }}>
             <h3 style={{ marginBottom: '16px', color: 'var(--accent)' }}>{t("scoring_trains")}</h3>
             <div className="form-group"><label className="form-label">{t("val_time")}</label><input type="number" step="0.5" value={treniTimeValue} onChange={(e) => setTreniTimeValue(e.target.value)} style={{ width: '100%' }} /></div>
@@ -377,7 +377,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <div className="form-group"><label className="form-label">{t("change_pen")}</label><input type="number" step="0.5" value={treniChangePen} onChange={(e) => setTreniChangePen(e.target.value)} style={{ width: '100%' }} /></div>
           </div>
 
-          {/* VOLI */}
+          {/* FLIGHTS */}
           <div style={{ flex: '1 1 300px' }}>
             <h3 style={{ marginBottom: '16px', color: 'var(--accent)' }}>{t("scoring_flights")}</h3>
             <div className="form-group"><label className="form-label">{t("val_time")}</label><input type="number" step="0.5" value={voliTimeValue} onChange={(e) => setVoliTimeValue(e.target.value)} style={{ width: '100%' }} /></div>
@@ -486,11 +486,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <div style={{ flex: 1, minWidth: '20px' }}></div>
 
           <button className="btn-outline" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Download size={16} /> Esporta
+            <Download size={16} /> {t("export_btn")}
           </button>
           
           <label className="btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
-            <Upload size={16} /> Importa
+            <Upload size={16} /> {t("import_btn")}
             <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
           </label>
         </div>

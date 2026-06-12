@@ -40,7 +40,7 @@ export async function fetchTrains(payload: any, signal?: AbortSignal) {
     const errorData = await res.json().catch(() => ({}));
     const detail = errorData.detail;
     const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
-    throw new Error(msg || 'Errore nella ricerca dei treni');
+    throw new Error(msg || 'Error searching for trains');
   }
   
   return res.json();
@@ -72,7 +72,7 @@ export async function fetchFlights(payload: any, signal?: AbortSignal) {
     const errorData = await res.json().catch(() => ({}));
     const detail = errorData.detail;
     const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
-    throw new Error(msg || 'Errore nella ricerca dei voli');
+    throw new Error(msg || 'Error searching for flights');
   }
   
   return res.json();

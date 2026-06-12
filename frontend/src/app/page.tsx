@@ -437,7 +437,7 @@ export default function Dashboard() {
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'var(--card-bg)', border: '1px solid var(--card-border)', padding: '6px 12px', borderRadius: '16px', fontSize: '13px', transition: 'all 0.2s' }}
                 >
                   <span>{s.origins.join(', ')} <ArrowLeftRight size={12} style={{display: 'inline', margin: '0 4px'}} /> {s.destinations.join(', ')}</span>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); removeSavedSearch(i); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '0', display: 'flex', marginLeft: '4px' }} title="Rimuovi">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); removeSavedSearch(i); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '0', display: 'flex', marginLeft: '4px' }} title={t("remove")}>
                     <X size={14} />
                   </button>
                 </div>
@@ -463,7 +463,7 @@ export default function Dashboard() {
                       />
                     </div>
                     {origins.length > 1 && (
-                      <button type="button" className="btn-outline" onClick={() => setOrigins(origins.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Rimuovi">
+                      <button type="button" className="btn-outline" onClick={() => setOrigins(origins.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={t("remove")}>
                         <X size={18} />
                       </button>
                     )}
@@ -471,7 +471,7 @@ export default function Dashboard() {
                 ))}
                 {origins.length < 5 && (
                   <button type="button" className="btn-outline" onClick={() => setOrigins([...origins, ''])} style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Plus size={14} /> Aggiungi origine
+                    <Plus size={14} /> {t("add_origin")}
                   </button>
                 )}
               </div>
@@ -509,7 +509,7 @@ export default function Dashboard() {
                       />
                     </div>
                     {destinations.length > 1 && (
-                      <button type="button" className="btn-outline" onClick={() => setDestinations(destinations.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Rimuovi">
+                      <button type="button" className="btn-outline" onClick={() => setDestinations(destinations.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={t("remove")}>
                         <X size={18} />
                       </button>
                     )}
@@ -517,7 +517,7 @@ export default function Dashboard() {
                 ))}
                 {destinations.length < 5 && (
                   <button type="button" className="btn-outline" onClick={() => setDestinations([...destinations, ''])} style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Plus size={14} /> Aggiungi destinazione
+                    <Plus size={14} /> {t("add_dest")}
                   </button>
                 )}
               </div>
@@ -547,7 +547,7 @@ export default function Dashboard() {
                   customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>(Inizio - Fine)</div>
+              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>{t("start_end")}</div>
             </div>
           </div>
           
@@ -580,7 +580,7 @@ export default function Dashboard() {
                   customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>(Inizio - Fine)</div>
+              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>{t("start_end")}</div>
             </div>
           </div>
         </div>
@@ -590,10 +590,10 @@ export default function Dashboard() {
             type="button" 
             className="btn-outline"
             onClick={handleSaveSearch}
-            title="Salva destinazioni"
+            title={t("save_destinations")}
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
-            <Bookmark size={16} /> Salva
+            <Bookmark size={16} /> {t("save_btn")}
           </button>
           
           <button 
