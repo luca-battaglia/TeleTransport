@@ -258,7 +258,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error('Export failed', e);
-      alert('Errore durante l\\'esportazione.');
+      alert("Errore durante l'esportazione.");
     }
   };
 
