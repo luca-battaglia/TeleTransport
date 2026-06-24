@@ -64,10 +64,7 @@ export default function AutocompleteInput({ value, onChange, options, placeholde
         }}
         onBlur={() => {
           setTimeout(() => {
-            const currentVal = valueRef.current.trim();
-            if (currentVal && currentVal.length !== 3 && !options.some(opt => opt.toLowerCase().trim() === currentVal.toLowerCase())) {
-              onChange("");
-            }
+            // Allow any input, don't clear if not found.
           }, 150);
         }}
         placeholder={placeholder}

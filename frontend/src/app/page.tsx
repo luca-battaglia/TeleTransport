@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark } from 'lucide-react';
+import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark, Clock } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
+import HistoryModal, { HistoryEntry } from '@/components/HistoryModal';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { it } from 'date-fns/locale/it';
@@ -38,6 +39,10 @@ export default function Dashboard() {
   const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [trainHistory, setTrainHistory] = useState<HistoryEntry[]>([]);
+  const [flightHistory, setFlightHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -202,9 +207,31 @@ export default function Dashboard() {
       if (mode === 'trains') {
         setTrainResults(res.data || []);
         setTrainSearched(true);
+        if (res.data && res.data.length > 0) {
+          const entry: HistoryEntry = {
+            timestamp: Date.now(), origin: origins[0], destination: destinations[0],
+            depStartStr, depEndStr, retStartStr, retEndStr, oneWay, results: res.data
+          };
+          setTrainHistory(prev => {
+            const next = [entry, ...prev].slice(0, 10);
+            localStorage.setItem('teletransport_train_history', JSON.stringify(next));
+            return next;
+          });
+        }
       } else {
         setFlightResults(res.data || []);
         setFlightSearched(true);
+        if (res.data && res.data.length > 0) {
+          const entry: HistoryEntry = {
+            timestamp: Date.now(), origin: origins[0], destination: destinations[0],
+            depStartStr, depEndStr, retStartStr, retEndStr, oneWay, results: res.data
+          };
+          setFlightHistory(prev => {
+            const next = [entry, ...prev].slice(0, 10);
+            localStorage.setItem('teletransport_flight_history', JSON.stringify(next));
+            return next;
+          });
+        }
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return;
@@ -241,6 +268,10 @@ export default function Dashboard() {
       if (localSaved) {
         setSavedSearches(JSON.parse(localSaved));
       }
+      const savedTrain = localStorage.getItem('teletransport_train_history');
+      if (savedTrain) setTrainHistory(JSON.parse(savedTrain));
+      const savedFlight = localStorage.getItem('teletransport_flight_history');
+      if (savedFlight) setFlightHistory(JSON.parse(savedFlight));
     } catch (e) {}
 
     try {
@@ -648,6 +679,10 @@ export default function Dashboard() {
             {mode === 'trains' ? t("open_trenitalia") : t("open_google_flights")}
           </button>
           
+          <button type="button" className="btn-outline" onClick={() => setIsHistoryOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' }} title={language === 'it' ? 'Cronologia' : 'History'}>
+            <Clock size={18} />
+          </button>
+          
           <button type="submit" className="btn-primary" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
             {loading ? t("searching") : t("search_solutions")}
@@ -746,6 +781,28 @@ export default function Dashboard() {
         </div>
       )}
       
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        mode={mode}
+        history={mode === 'trains' ? trainHistory : flightHistory}
+        onSelect={(entry) => {
+          setOrigins([entry.origin]);
+          setDestinations([entry.destination]);
+          setDepDateRange([entry.depStartStr ? new Date(entry.depStartStr) : null, entry.depEndStr ? new Date(entry.depEndStr) : null]);
+          setRetDateRange([entry.retStartStr ? new Date(entry.retStartStr) : null, entry.retEndStr ? new Date(entry.retEndStr) : null]);
+          setOneWay(entry.oneWay);
+          if (mode === 'trains') {
+            setTrainResults(entry.results);
+            setTrainSearched(true);
+            setTrainError(null);
+          } else {
+            setFlightResults(entry.results);
+            setFlightSearched(true);
+            setFlightError(null);
+          }
+        }}
+      />
     </div>
   );
 }
