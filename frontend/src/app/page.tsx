@@ -29,7 +29,8 @@ export default function Dashboard() {
   const [oneWay, setOneWay] = useState(true);
   const [savedSearches, setSavedSearches] = useState<{trains: {origins: string[], destinations: string[]}[], flights: {origins: string[], destinations: string[]}[]}>({ trains: [], flights: [] });
   
-  const [loading, setLoading] = useState(false);
+  const [trainLoading, setTrainLoading] = useState(false);
+  const [flightLoading, setFlightLoading] = useState(false);
   const [trainSearched, setTrainSearched] = useState(false);
   const [flightSearched, setFlightSearched] = useState(false);
   const [trainResults, setTrainResults] = useState<any[]>([]);
@@ -38,7 +39,8 @@ export default function Dashboard() {
   const [flightError, setFlightError] = useState<string | null>(null);
   const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const trainAbortControllerRef = useRef<AbortController | null>(null);
+  const flightAbortControllerRef = useRef<AbortController | null>(null);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [trainHistory, setTrainHistory] = useState<HistoryEntry[]>([]);
@@ -106,21 +108,28 @@ export default function Dashboard() {
   };
 
   const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setLoading(false);
+    if (mode === 'trains') {
+      if (trainAbortControllerRef.current) trainAbortControllerRef.current.abort();
+      setTrainLoading(false);
+    } else {
+      if (flightAbortControllerRef.current) flightAbortControllerRef.current.abort();
+      setFlightLoading(false);
     }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    
     const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setLoading(true);
+    if (mode === 'trains') {
+      if (trainAbortControllerRef.current) trainAbortControllerRef.current.abort();
+      trainAbortControllerRef.current = controller;
+      setTrainLoading(true);
+    } else {
+      if (flightAbortControllerRef.current) flightAbortControllerRef.current.abort();
+      flightAbortControllerRef.current = controller;
+      setFlightLoading(true);
+    }
     if (mode === 'trains') {
       setTrainSearched(false);
       setTrainError(null);
@@ -146,13 +155,13 @@ export default function Dashboard() {
 
     if (!depStartStr) {
       if (mode === 'trains') setTrainError(t("err_outbound")); else setFlightError(t("err_outbound"));
-      setLoading(false);
+      mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
       return;
     }
     
     if (!oneWay && !retStartStr) {
       if (mode === 'trains') setTrainError(t("err_return")); else setFlightError(t("err_return"));
-      setLoading(false);
+      mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
       return;
     }
 
@@ -163,7 +172,7 @@ export default function Dashboard() {
       const diff = (depDateRange[1].getTime() - depDateRange[0].getTime()) / msInDay;
       if (diff > MAX_RANGE_DAYS) {
         if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
-        setLoading(false);
+        mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
         return;
       }
     }
@@ -172,7 +181,7 @@ export default function Dashboard() {
       const diff = (retDateRange[1].getTime() - retDateRange[0].getTime()) / msInDay;
       if (diff > MAX_RANGE_DAYS) {
         if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
-        setLoading(false);
+        mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
         return;
       }
     }
@@ -183,7 +192,7 @@ export default function Dashboard() {
         const parsedLocal = localData ? JSON.parse(localData) : {};
         if (!parsedLocal.serpapiKey) {
           setFlightError(t("err_api_key"));
-          setLoading(false);
+          setFlightLoading(false);
           return;
         }
       } catch (e) {}
@@ -243,8 +252,10 @@ export default function Dashboard() {
         setFlightSearched(true);
       }
     } finally {
-      if (abortControllerRef.current === controller) {
-        setLoading(false);
+      if (mode === 'trains' && trainAbortControllerRef.current === controller) {
+        setTrainLoading(false);
+      } else if (mode === 'flights' && flightAbortControllerRef.current === controller) {
+        setFlightLoading(false);
       }
     }
   };
@@ -683,11 +694,11 @@ export default function Dashboard() {
             <Clock size={18} />
           </button>
           
-          <button type="submit" className="btn-primary" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
-            {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
-            {loading ? t("searching") : t("search_solutions")}
+          <button type="submit" className="btn-primary" disabled={mode === 'trains' ? trainLoading : flightLoading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
+            {(mode === 'trains' ? trainLoading : flightLoading) ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+            {(mode === 'trains' ? trainLoading : flightLoading) ? t("searching") : t("search_solutions")}
           </button>
-          {loading && (
+          {(mode === 'trains' ? trainLoading : flightLoading) && (
             <div 
               onClick={handleStop}
               title={t("stop_search")}
@@ -706,7 +717,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {!loading && (mode === 'trains' ? trainSearched : flightSearched) && !(mode === 'trains' ? trainError : flightError) && (mode === 'trains' ? trainResults : flightResults).length === 0 && (
+      {!(mode === 'trains' ? trainLoading : flightLoading) && (mode === 'trains' ? trainSearched : flightSearched) && !(mode === 'trains' ? trainError : flightError) && (mode === 'trains' ? trainResults : flightResults).length === 0 && (
         <div style={{ padding: '16px', textAlign: 'center', color: 'var(--muted)', background: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
           {t("no_solutions")}
         </div>
