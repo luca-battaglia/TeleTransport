@@ -223,13 +223,30 @@ p { color: var(--muted); line-height: 1.6; }
   animation: spin 1s linear infinite;
 }
 
+/* Griglia del form di ricerca: due colonne su desktop, una sola su telefono,
+   dove 1fr 1fr lascerebbe ai campi data ~127px e la data non ci starebbe. */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 700px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* DatePicker Vertical Scrollable Customization */
 .react-datepicker {
   display: flex !important;
   flex-direction: column;
-  max-height: 380px;
+  /* Mai più alto del viewport: su telefono in orizzontale 380px uscirebbero dallo schermo. */
+  max-height: min(380px, 60vh);
   overflow-y: auto;
   overflow-x: hidden;
+  /* Evita che a fine lista lo scroll prosegua sulla pagina sotto. */
+  overscroll-behavior: contain;
 }
 .react-datepicker__month-container {
   float: none !important;

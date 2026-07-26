@@ -10,8 +10,13 @@ import HistoryModal, { HistoryEntry } from '@/components/HistoryModal';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { it } from 'date-fns/locale/it';
+import { differenceInCalendarDays } from 'date-fns';
 
 registerLocale('it', it);
+
+// Mesi renderizzati nel popup date: il calendario scorre verticalmente (vedi globals.css).
+const MONTHS_SHOWN = 12;
+const MAX_RANGE_DAYS = 14;
 
 export default function Dashboard() {
   const { t, language } = useLanguage();
@@ -165,22 +170,19 @@ export default function Dashboard() {
       return;
     }
 
-    const MAX_RANGE_DAYS = 7;
-    const msInDay = 24 * 60 * 60 * 1000;
+    const rangeError = t("err_max_range").replace('{days}', String(MAX_RANGE_DAYS));
     
     if (depDateRange[0] && depDateRange[1]) {
-      const diff = (depDateRange[1].getTime() - depDateRange[0].getTime()) / msInDay;
-      if (diff > MAX_RANGE_DAYS) {
-        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
+      if (differenceInCalendarDays(depDateRange[1], depDateRange[0]) > MAX_RANGE_DAYS) {
+        if (mode === 'trains') setTrainError(rangeError); else setFlightError(rangeError);
         mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
         return;
       }
     }
     
     if (!oneWay && retDateRange[0] && retDateRange[1]) {
-      const diff = (retDateRange[1].getTime() - retDateRange[0].getTime()) / msInDay;
-      if (diff > MAX_RANGE_DAYS) {
-        if (mode === 'trains') setTrainError(t("err_max_range")); else setFlightError(t("err_max_range"));
+      if (differenceInCalendarDays(retDateRange[1], retDateRange[0]) > MAX_RANGE_DAYS) {
+        if (mode === 'trains') setTrainError(rangeError); else setFlightError(rangeError);
         mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
         return;
       }
@@ -472,7 +474,7 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <div className="form-grid">
           {savedSearches[mode] && savedSearches[mode].length > 0 && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', gridColumn: '1 / -1' }}>
               {savedSearches[mode].map((s, i) => (
@@ -575,7 +577,7 @@ export default function Dashboard() {
                 <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
                 <DatePicker
                   selectsRange={true}
-                  monthsShown={2}
+                  monthsShown={MONTHS_SHOWN}
                   locale={language === 'it' ? 'it' : undefined}
                   startDate={depDateRange[0] || undefined}
                   endDate={depDateRange[1] || undefined}
@@ -616,7 +618,7 @@ export default function Dashboard() {
                 <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
                 <DatePicker
                   selectsRange={true}
-                  monthsShown={2}
+                  monthsShown={MONTHS_SHOWN}
                   locale={language === 'it' ? 'it' : undefined}
                   startDate={retDateRange[0] || undefined}
                   endDate={retDateRange[1] || undefined}

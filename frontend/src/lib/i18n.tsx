@@ -73,7 +73,7 @@ const en: Translations = {
   copy_table: "Copy Table (Markdown)",
   err_outbound: "You must enter an outbound date (start).",
   err_return: "You must enter a return date or check 'One-way'.",
-  err_max_range: "The maximum allowed date range is 7 days. Please select a shorter range to prevent system overload.",
+  err_max_range: "The maximum allowed date range is {days} days. Please select a shorter range to prevent system overload.",
   err_api_key: "To search flights, you must enter your SerpApi Key in the Settings.",
   err_generic: "Error during search",
 
@@ -197,7 +197,7 @@ const it: Translations = {
   copy_table: "Copia Tabella (Markdown)",
   err_outbound: "Devi inserire una data di andata (inizio).",
   err_return: "Devi inserire una data di ritorno o spuntare 'Solo Andata'.",
-  err_max_range: "L'intervallo massimo consentito per il range di date è di 7 giorni. Seleziona un range più breve per non sovraccaricare il sistema.",
+  err_max_range: "L'intervallo massimo consentito per il range di date è di {days} giorni. Seleziona un range più breve per non sovraccaricare il sistema.",
   err_api_key: "Per cercare voli è necessario inserire la propria API Key di SerpApi nelle Impostazioni.",
   err_generic: "Errore durante la ricerca",
 
