@@ -6,10 +6,10 @@
 # Order of precedence:
 #   CLI  >  TOML  >  default hardcoded
 #
-# Automatic search for the file (se NON passi --config):
+# Automatic search for the file (when --config is NOT passed):
 # - ./travel_ranker.toml
 # - ~/.config/travel_ranker.toml
-# - oppure variabile ambiente: TRAVEL_RANKER_CONFIG=/percorso/al/file.toml
+# - or the environment variable: TRAVEL_RANKER_CONFIG=/path/to/file.toml
 
 [reminders]
 booking = "!!! REMEMBER TO USE THE 15€ BONUS ON 15€ SU BOOKING.COM !!!"
@@ -21,27 +21,27 @@ booking = "!!! REMEMBER TO USE THE 15€ BONUS ON 15€ SU BOOKING.COM !!!"
 [trains]
 # Filters / limits
 min_price = 32.0          # €: discard SALEABLE solutions with base price < min_price
-max_per_day = 120         # max rows accepted per day and per route (dopo filtri/scoring)
-page_size = 40            # endpoint pagination: limit/offset (più alto = meno chiamate)
-limit = 50                # how many rows to print in table (top-N dopo sorting)
+max_per_day = 120         # max rows accepted per day and per route (after filters/scoring)
+page_size = 40            # endpoint pagination: limit/offset (higher = fewer calls)
+limit = 50                # how many rows to print in table (top-N after sorting)
 
-# Only for interactive wizard (quando lanci trains.py senza argomenti CLI)
+# Only for interactive wizard (when trains.py runs with no CLI arguments)
 wizard_min_price = 5.0   # €: min_price used in wizard
 
-# Network robustness/polling (non cambia le feature, solo retry/anti-loop)
+# Network robustness/polling (does not change features, only retry/anti-loop)
 poll_empty_retries = 6    # how many times to retry if a page is empty
 poll_dup_retries = 4      # how many times to retry if a page contains only duplicates
-poll_sleep_base = 0.6     # seconds: base for backoff with jitter (aumenta con i tentativi)
+poll_sleep_base = 0.6     # seconds: base for backoff with jitter (grows with the attempt count)
 scan_cap_mult = 25        # scan_cap = max(300, max_per_day * scan_cap_mult)
 api_timeout_ms = 45000    # ms: timeout for single API call
 api_retries = 6           # retry for temporary statuses (429/5xx/timeout ecc.)
 
-# Scoring (ranking): sort by adjusted_cost, poi durata, poi orario partenza.
-# adjusted_cost = prezzo_base
-#               + (durata_ore * time_value_eur_per_hour)
-#               + penalità_partenza_presto
-#               + penalità_arrivo_tardi
-#               + (cambi * change_penalty_eur)
+# Scoring (ranking): sort by adjusted_cost, then duration, then departure time.
+# adjusted_cost = base_price
+#               + (duration_hours * time_value_eur_per_hour)
+#               + early_departure_penalty
+#               + late_arrival_penalty
+#               + (changes * change_penalty_eur)
 [trains.scoring]
 time_value_eur_per_hour = 20.0            # €/h: how much a travel hour is worth (più alto => preferisci più breve)
 early_departure_ref_hour = 9              # ora: if you depart before this hour, proportional penalty triggers
@@ -80,14 +80,14 @@ limit = 50            # how many rows to print in table
 
 # Scoring (ranking)
 # One-way:
-# adjusted_cost = prezzo
-#               + (durata_ore * time_value_eur_per_hour)
-#               + penalità_partenza_presto
-#               + penalità_arrivo_tardi
-#               + (connessioni * connection_penalty_eur)
+# adjusted_cost = price
+#               + (duration_hours * time_value_eur_per_hour)
+#               + early_departure_penalty
+#               + late_arrival_penalty
+#               + (connections * connection_penalty_eur)
 #
 # Round-trip (NOTE: in the code the "price" used is the return one, as in the original):
-# adjusted_cost = prezzo_ritorno
+# adjusted_cost = return_price
 #               + value_time(durata_andata + durata_ritorno)
 #               + early(andata) + early(ritorno)
 #               + late(andata)  + late(ritorno)

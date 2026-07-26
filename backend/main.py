@@ -24,15 +24,15 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from core.trains import (
-    SearchTask as TreniSearchTask,
-    Route as TreniRoute,
+    SearchTask as TrainSearchTask,
+    Route as TrainRoute,
     search_ranked_solutions,
-    load_config_dict as load_treni_config,
+    load_config_dict as load_trains_config,
     parse_trains_config,
 )
 from core.flights import (
     build_rows_multi,
-    load_config_dict as load_voli_config,
+    load_config_dict as load_flights_config,
     parse_flights_config,
 )
 
@@ -81,34 +81,34 @@ def override_config(base_dict: dict, overrides: dict) -> dict:
 @app.get("/api/config")
 def get_config():
     try:
-        cfg_dict = load_voli_config(None, verbose=False)
+        cfg_dict = load_flights_config(None, verbose=False)
     except Exception:
         cfg_dict = {}
     
     ui_cfg = cfg_dict.get("ui", {})
     
     # Fallbacks in case config is missing
-    treni_ui = ui_cfg.get("trains", {})
-    voli_ui = ui_cfg.get("flights", {})
+    trains_ui = ui_cfg.get("trains", {})
+    flights_ui = ui_cfg.get("flights", {})
     
     return {
         "trains": {
-            "default_origin": treni_ui.get("default_origin", "Zurigo HB"),
-            "default_destination": treni_ui.get("default_destination", "Alessandria"),
-            "options": treni_ui.get("options", [
+            "default_origin": trains_ui.get("default_origin", "Zurigo HB"),
+            "default_destination": trains_ui.get("default_destination", "Alessandria"),
+            "options": trains_ui.get("options", [
                 "Torino ( All Stations )", "Alessandria", "Zurigo HB", 
                 "Bari Centrale", "Lecce", "Milano Centrale", "Roma Termini", 
                 "Napoli Centrale", "Venezia S. Lucia", "Bologna Centrale"
             ])
         },
         "flights": {
-            "default_origin": voli_ui.get("default_origin", "Zurigo"),
-            "default_destination": voli_ui.get("default_destination", "Bari"),
-            "options": voli_ui.get("options", [
+            "default_origin": flights_ui.get("default_origin", "Zurigo"),
+            "default_destination": flights_ui.get("default_destination", "Bari"),
+            "options": flights_ui.get("options", [
                 "Zurigo", "Bari", "Brindisi", "Torino", "Milano Linate", "Milano Malpensa", 
                 "Genova", "Roma", "Napoli", "Catania", "Palermo", "Venezia", "Bologna"
             ]),
-            "iata_mapping": voli_ui.get("iata_mapping", {
+            "iata_mapping": flights_ui.get("iata_mapping", {
                 "zurigo": "ZRH", "zurich": "ZRH", "bari": "BRI", "brindisi": "BDS",
                 "torino": "TRN", "milan": "MIL", "linate": "LIN", "malpensa": "MXP",
                 "genova": "GOA", "genoa": "GOA",
@@ -125,7 +125,7 @@ async def get_trains(
     x_config: Optional[str] = Header(None)
 ):
     try:
-        cfg_dict = load_treni_config(None, verbose=False)
+        cfg_dict = load_trains_config(None, verbose=False)
     except Exception:
         cfg_dict = {}
 
@@ -145,12 +145,12 @@ async def get_trains(
     # Build tasks for all origin/dest pairs
     for origin in req.origins:
         for dest in req.destinations:
-            route = TreniRoute(origin, dest)
-            tasks.append(TreniSearchTask(route=route, d1=req.dep_start, d2=req.dep_end))
+            route = TrainRoute(origin, dest)
+            tasks.append(TrainSearchTask(route=route, d1=req.dep_start, d2=req.dep_end))
             
             if not req.one_way and req.ret_start and req.ret_end:
-                ret_route = TreniRoute(dest, origin)
-                tasks.append(TreniSearchTask(route=ret_route, d1=req.ret_start, d2=req.ret_end))
+                ret_route = TrainRoute(dest, origin)
+                tasks.append(TrainSearchTask(route=ret_route, d1=req.ret_start, d2=req.ret_end))
 
     try:
         ranked = await search_ranked_solutions(
@@ -198,7 +198,7 @@ async def get_flights(
         raise HTTPException(status_code=400, detail="To search for flights, you must enter your SerpApi Key in Settings.")
 
     try:
-        cfg_dict = load_voli_config(None, verbose=False)
+        cfg_dict = load_flights_config(None, verbose=False)
     except Exception:
         cfg_dict = {}
 

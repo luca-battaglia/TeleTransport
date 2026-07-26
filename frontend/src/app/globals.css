@@ -223,8 +223,8 @@ p { color: var(--muted); line-height: 1.6; }
   animation: spin 1s linear infinite;
 }
 
-/* Griglia del form di ricerca: due colonne su desktop, una sola su telefono,
-   dove 1fr 1fr lascerebbe ai campi data ~127px e la data non ci starebbe. */
+/* Search form grid: two columns on desktop, one on phones, where 1fr 1fr would
+   leave the date fields ~127px wide and the date itself would not fit. */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -241,11 +241,11 @@ p { color: var(--muted); line-height: 1.6; }
 .react-datepicker {
   display: flex !important;
   flex-direction: column;
-  /* Mai più alto del viewport: su telefono in orizzontale 380px uscirebbero dallo schermo. */
+  /* Never taller than the viewport: a fixed 380px overflows a phone in landscape. */
   max-height: min(380px, 60vh);
   overflow-y: auto;
   overflow-x: hidden;
-  /* Evita che a fine lista lo scroll prosegua sulla pagina sotto. */
+  /* Stop the page behind from scrolling once the list reaches its end. */
   overscroll-behavior: contain;
 }
 .react-datepicker__month-container {

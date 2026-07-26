@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import date
 from typing import List, Optional, Sequence, Tuple
-from core.trains import Route, SearchTask, load_config_dict, parse_trains_config, parse_date_range_human, search_ranked_solutions, print_table, interactive_wizard, TreniDefaultsConfig, TrainScoringConfig, ROUTES_PRESET, eprint
+from core.trains import Route, SearchTask, load_config_dict, parse_trains_config, parse_date_range_human, search_ranked_solutions, print_table, interactive_wizard, TrainsDefaultsConfig, TrainScoringConfig, ROUTES_PRESET, eprint
 
 # ---------------- CLI ----------------
 
@@ -140,12 +140,12 @@ async def amain(argv: Optional[Sequence[str]] = None) -> int:
 
 
 def main() -> int:
-    # Per wizard: carichiamo config con ricerca automatica (silenziosa).
+    # For the wizard: load the config using automatic (silent) discovery.
     try:
         cfg_dict = load_config_dict(None, verbose=False)
         cfg_defaults, cfg_scoring = parse_trains_config(cfg_dict)
     except Exception:
-        cfg_defaults, cfg_scoring = TreniDefaultsConfig(), TrainScoringConfig()
+        cfg_defaults, cfg_scoring = TrainsDefaultsConfig(), TrainScoringConfig()
 
     if len(sys.argv) == 1 and sys.stdin.isatty():
         try:

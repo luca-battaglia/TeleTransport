@@ -14,7 +14,7 @@ import { differenceInCalendarDays } from 'date-fns';
 
 registerLocale('it', it);
 
-// Mesi renderizzati nel popup date: il calendario scorre verticalmente (vedi globals.css).
+// Months rendered in the date popup, which scrolls vertically (see globals.css).
 const MONTHS_SHOWN = 12;
 const MAX_RANGE_DAYS = 14;
 

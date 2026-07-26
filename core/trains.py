@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # trains.py
-# Trenitalia (LeFrecce) travel solutions ranker con Playwright.
+# Trenitalia (LeFrecce) travel solutions ranker built on Playwright.
 #
-# Update: parametri configurabili via TOML unico (es. travel_ranker.toml).
-# CLI > TOML > default originali. Se TOML assente, comportamento invariato.
+# Update: parameters are configurable through a single TOML file (e.g. travel_ranker.toml).
+# CLI > TOML > original defaults. With no TOML present, behaviour is unchanged.
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ BFF_BASE = "https://www.lefrecce.it/Channels.Website.BFF.WEB"
 SOLUTIONS_URL = f"{BFF_BASE}/website/ticket/solutions"
 LOC_SEARCH_URL = f"{BFF_BASE}/website/locations/search"
 
-# Preset stazioni (focus solo: Zurigo/Torino/Alessandria)
+# Station presets (scope is limited to Zurigo/Torino/Alessandria)
 ZURIGO = "Zurigo HB"
 TORINO = "Torino ( All Stations )"
 ALESSANDRIA = "Alessandria"
@@ -181,24 +181,24 @@ class TrainsDefaultsConfig:
 
 
 def parse_trains_config(cfg: Dict[str, Any]) -> Tuple[TrainsDefaultsConfig, TrainScoringConfig]:
-    treni = _deep_get(cfg, ["trains"])
-    treni = treni if isinstance(treni, dict) else {}
+    trains_cfg = _deep_get(cfg, ["trains"])
+    trains_cfg = trains_cfg if isinstance(trains_cfg, dict) else {}
 
     scoring = _deep_get(cfg, ["trains", "scoring"])
     scoring = scoring if isinstance(scoring, dict) else {}
 
     dflt = TrainsDefaultsConfig(
-        min_price=_as_float(treni.get("min_price")) or 20.0,
-        max_per_day=_as_int(treni.get("max_per_day")) or 120,
-        page_size=_as_int(treni.get("page_size")) or 40,
-        limit=_as_int(treni.get("limit")) or 50,
-        wizard_min_price=_as_float(treni.get("wizard_min_price")) or 30.0,
-        poll_empty_retries=_as_int(treni.get("poll_empty_retries")) or 6,
-        poll_dup_retries=_as_int(treni.get("poll_dup_retries")) or 4,
-        poll_sleep_base=_as_float(treni.get("poll_sleep_base")) or 0.6,
-        scan_cap_mult=_as_int(treni.get("scan_cap_mult")) or 25,
-        api_timeout_ms=_as_int(treni.get("api_timeout_ms")) or 45_000,
-        api_retries=_as_int(treni.get("api_retries")) or 6,
+        min_price=_as_float(trains_cfg.get("min_price")) or 20.0,
+        max_per_day=_as_int(trains_cfg.get("max_per_day")) or 120,
+        page_size=_as_int(trains_cfg.get("page_size")) or 40,
+        limit=_as_int(trains_cfg.get("limit")) or 50,
+        wizard_min_price=_as_float(trains_cfg.get("wizard_min_price")) or 30.0,
+        poll_empty_retries=_as_int(trains_cfg.get("poll_empty_retries")) or 6,
+        poll_dup_retries=_as_int(trains_cfg.get("poll_dup_retries")) or 4,
+        poll_sleep_base=_as_float(trains_cfg.get("poll_sleep_base")) or 0.6,
+        scan_cap_mult=_as_int(trains_cfg.get("scan_cap_mult")) or 25,
+        api_timeout_ms=_as_int(trains_cfg.get("api_timeout_ms")) or 45_000,
+        api_retries=_as_int(trains_cfg.get("api_retries")) or 6,
     )
 
     s = TrainScoringConfig(
@@ -410,7 +410,7 @@ _DEFAULT_HEADERS = {
 
 
 def _jitter_sleep(base: float, factor: float = 1.0) -> float:
-    # jitter leggero + backoff soft
+    # light jitter + soft backoff
     return min(8.0, base * factor * (0.85 + random.random() * 0.3))
 
 
@@ -579,14 +579,14 @@ async def fetch_locations(
 def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
     nq = (name_query or "").strip().casefold()
 
-    # match esatto
+    # exact match
     for loc in locations:
         n = str(loc.get("name", "")).casefold()
         dn = str(loc.get("displayName", "")).casefold()
         if n == nq or dn == nq:
             return int(loc["id"])
 
-    # Heuristics Zurigo
+    # Heuristics for Zurigo
     if any(k in nq for k in ("zur", "zuri", "zurigo", "zür", "zuer")):
         for loc in locations:
             n = str(loc.get("name", "")).casefold()
@@ -594,7 +594,7 @@ def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
             if any(k in n or k in dn for k in ("hb", "hauptbahnhof", "centrale")):
                 return int(loc["id"])
 
-    # Heuristics Torino (Tutte le stazioni)
+    # Heuristics for Torino ("Tutte le stazioni")
     if "torino" in nq:
         for loc in locations:
             n = str(loc.get("name", "")).casefold()
@@ -647,7 +647,7 @@ def compute_solution_metrics(
         return None
 
     try:
-        # a volte arriva come stringa
+        # sometimes it comes through as a string
         base_price = float(str(amount).replace(",", ".").strip())
     except Exception:
         return None
@@ -674,7 +674,7 @@ def compute_solution_metrics(
     travel_hours = duration.total_seconds() / 3600.0
     time_value = travel_hours * float(scoring.time_value_eur_per_hour)
 
-    # Early departure penalty (prima dell'ora ref) (€/h)
+    # Early departure penalty (before the reference hour) (€/h)
     ref_hour = int(scoring.early_departure_ref_hour)
     ref_dt = datetime.combine(dep_local.date(), time(ref_hour, 0), TZ)
     early_pen = 0.0
@@ -798,7 +798,7 @@ async def search_ranked_solutions(
         async def _post_json(url: str, payload: Dict[str, Any]) -> Tuple[Any, bool, str]:
             from core.cache import app_cache, generate_cache_key
             
-            cache_key = generate_cache_key("treni_api", {"url": url, "payload": payload})
+            cache_key = generate_cache_key("trains_api", {"url": url, "payload": payload})
             if not no_cache:
                 cached = app_cache.get(cache_key)
                 if cached is not None:
@@ -828,7 +828,7 @@ async def search_ranked_solutions(
             q = quote_plus(station_name)
             url = f"{LOC_SEARCH_URL}?name={q}&limit=50"
             
-            cache_key = generate_cache_key("treni_loc", {"url": url})
+            cache_key = generate_cache_key("trains_loc", {"url": url})
             locs = None
             if not no_cache:
                 locs = app_cache.get(cache_key)
@@ -860,7 +860,7 @@ async def search_ranked_solutions(
                 offset = 0
                 scanned = 0
 
-                # cap anti-loop: mantiene comportamento ma evita runaway se endpoint cambia/pagina “sporca”
+                # anti-loop cap: preserves behaviour but avoids a runaway if the endpoint changes or a page is dirty
                 scan_cap = max(300, int(max_solutions_per_day) * max(1, int(scan_cap_multiplier)))
 
                 empty_tries = 0
@@ -868,7 +868,7 @@ async def search_ranked_solutions(
                 passed_day = False
 
                 while collected < max_solutions_per_day and scanned < scan_cap and not passed_day:
-                    # richiesta "piena" (page_size) per ridurre loop in caso di molte scartate
+                    # "full" request (page_size) to reduce looping when many rows are discarded
                     limit = int(min(page_size, max(1, page_size)))
 
                     payload = {
@@ -960,7 +960,7 @@ async def search_ranked_solutions(
                             app_cache.set(cache_key, data, expire=1800)
                         break
 
-                    # se la pagina è tutta duplicata, aspetta un attimo e riprova (endpoint talvolta “ripete”)
+                    # if the page is entirely duplicated, wait a moment and retry (the endpoint sometimes repeats)
                     if unique_in_call == 0:
                         if not is_cached and dup_tries < poll_dup_retries:
                             dup_tries += 1
@@ -973,7 +973,7 @@ async def search_ranked_solutions(
                             app_cache.set(cache_key, data, expire=1800)
                         break
 
-                    # se abbiamo “unici” ma non abbiamo aggiunto nulla, aumentiamo comunque offset per progredire
+                    # if we found unique rows but added none, bump the offset anyway to make progress
                     dup_tries = 0
                     offset += returned
                     
@@ -981,7 +981,7 @@ async def search_ranked_solutions(
                         from core.cache import app_cache
                         app_cache.set(cache_key, data, expire=1800)
 
-                    # micro-throttle quando stiamo facendo molte chiamate in rapida sequenza
+                    # micro-throttle when firing many calls in quick succession
                     if not is_cached and added_in_call == 0 and (empty_tries == 0):
                         await asyncio.sleep(_jitter_sleep(0.12, factor=1.0))
                 if scanned >= scan_cap and verbose:

@@ -1,4 +1,4 @@
-// API URL è gestito tramite proxy (rewrites) in next.config.ts per evitare problemi di CORS e firewall
+// The API URL is proxied through rewrites in next.config.ts to avoid CORS and firewall issues
 
 export function getSettings() {
   if (typeof window === 'undefined') return {};

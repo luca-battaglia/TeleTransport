@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # flights.py
 #
-# Output: SOLO tabella su stdout. Prompt/errori/warning/progress su stderr.
+# Output: ONLY the table goes to stdout. Prompts/errors/warnings/progress go to stderr.
 #
-# Config via TOML unico (es. travel_ranker.toml).
-# Precedenza: CLI > TOML > default.
-# Se TOML assente, comportamento invariato.
+# Configured through a single TOML file (e.g. travel_ranker.toml).
+# Precedence: CLI > TOML > defaults.
+# With no TOML present, behaviour is unchanged.
 #
 # Update:
-# - preset multi-aeroporto: Zurigo -> Bari/Brindisi e viceversa
-# - per Brindisi (BDS) aggiunge costi terra:
-#     +30€ benzina
-#     +1.5h * valore del tempo (time_value_eur_per_hour)
-#     +3h * valore tempo accompagnatori (companions_time_value_eur_per_hour)
-#   Applicazione:
+# - multi-airport presets: Zurigo -> Bari/Brindisi and back
+# - for Brindisi (BDS) it adds ground costs:
+#     +30€ fuel
+#     +1.5h * value of time (time_value_eur_per_hour)
+#     +3h * companions' value of time (companions_time_value_eur_per_hour)
+#   Applied as:
 #     one-way: 1x
 #     round-trip: 2x
 
@@ -85,7 +85,7 @@ ROUTE_PRESETS: Dict[str, RoutePreset] = {
         destinations=(IATA_ZURICH,),
     ),
 
-    # alias opzionali comodi
+    # handy optional aliases
     "zrh-puglia": RoutePreset(
         label="zurigo -> bari/brindisi",
         origins=(IATA_ZURICH,),
@@ -194,7 +194,7 @@ def load_config_dict(config_path: Optional[str], *, verbose: bool) -> Dict[str, 
 
 
 @dataclass(frozen=True)
-class VoliScoringConfig:
+class FlightsScoringConfig:
     time_value_eur_per_hour: float = 20.0
     early_departure_ref_hour: int = 9
     early_departure_penalty_eur_per_hour: float = 20.0
@@ -203,7 +203,7 @@ class VoliScoringConfig:
     late_arrival_penalty_eur_per_hour: float = 15.0
     connection_penalty_eur: float = 5.0
 
-    # Costo orario accompagnatori (€/h)
+    # Companions' hourly cost (€/h)
     companions_time_value_eur_per_hour: float = 8.0
     
     # Generic airport extra costs
@@ -230,30 +230,30 @@ class FlightsDefaultsConfig:
     reminders: Dict[str, str] = None
 
 
-def parse_flights_config(cfg: Dict[str, Any]) -> Tuple[FlightsDefaultsConfig, VoliScoringConfig]:
-    voli = _deep_get(cfg, ["flights"])
-    voli = voli if isinstance(voli, dict) else {}
+def parse_flights_config(cfg: Dict[str, Any]) -> Tuple[FlightsDefaultsConfig, FlightsScoringConfig]:
+    flights_cfg = _deep_get(cfg, ["flights"])
+    flights_cfg = flights_cfg if isinstance(flights_cfg, dict) else {}
 
     scoring = _deep_get(cfg, ["flights", "scoring"])
     scoring = scoring if isinstance(scoring, dict) else {}
 
     dflt = FlightsDefaultsConfig(
-        currency=_as_str(voli.get("currency")) or "EUR",
-        hl=_as_str(voli.get("hl")) or "it",
-        gl=_as_str(voli.get("gl")) or "it",
-        deep_search=_as_bool(voli.get("deep_search")) if _as_bool(voli.get("deep_search")) is not None else True,
-        show_hidden=_as_bool(voli.get("show_hidden")) if _as_bool(voli.get("show_hidden")) is not None else True,
-        no_cache=_as_bool(voli.get("no_cache")) if _as_bool(voli.get("no_cache")) is not None else False,
-        dedup=_as_bool(voli.get("dedup")) if _as_bool(voli.get("dedup")) is not None else True,
-        min_price=_as_int(voli.get("min_price")) or 3,
-        top_outbounds=_as_int(voli.get("top_outbounds")) or 10,
-        top_returns=_as_int(voli.get("top_returns")) or 20,
-        top_flights=_as_int(voli.get("top_flights")) or 80,
-        limit=_as_int(voli.get("limit")) or 50,
+        currency=_as_str(flights_cfg.get("currency")) or "EUR",
+        hl=_as_str(flights_cfg.get("hl")) or "it",
+        gl=_as_str(flights_cfg.get("gl")) or "it",
+        deep_search=_as_bool(flights_cfg.get("deep_search")) if _as_bool(flights_cfg.get("deep_search")) is not None else True,
+        show_hidden=_as_bool(flights_cfg.get("show_hidden")) if _as_bool(flights_cfg.get("show_hidden")) is not None else True,
+        no_cache=_as_bool(flights_cfg.get("no_cache")) if _as_bool(flights_cfg.get("no_cache")) is not None else False,
+        dedup=_as_bool(flights_cfg.get("dedup")) if _as_bool(flights_cfg.get("dedup")) is not None else True,
+        min_price=_as_int(flights_cfg.get("min_price")) or 3,
+        top_outbounds=_as_int(flights_cfg.get("top_outbounds")) or 10,
+        top_returns=_as_int(flights_cfg.get("top_returns")) or 20,
+        top_flights=_as_int(flights_cfg.get("top_flights")) or 80,
+        limit=_as_int(flights_cfg.get("limit")) or 50,
         reminders=_deep_get(cfg, ["reminders"]) or {},
     )
 
-    s = VoliScoringConfig(
+    s = FlightsScoringConfig(
         time_value_eur_per_hour=_as_float(scoring.get("time_value_eur_per_hour")) or 20.0,
         early_departure_ref_hour=_as_int(scoring.get("early_departure_ref_hour")) or 9,
         early_departure_penalty_eur_per_hour=_as_float(scoring.get("early_departure_penalty_eur_per_hour")) or 20.0,
@@ -262,7 +262,7 @@ def parse_flights_config(cfg: Dict[str, Any]) -> Tuple[FlightsDefaultsConfig, Vo
         late_arrival_penalty_eur_per_hour=_as_float(scoring.get("late_arrival_penalty_eur_per_hour")) or 15.0,
         connection_penalty_eur=_as_float(scoring.get("connection_penalty_eur")) or 5.0,
         companions_time_value_eur_per_hour=_as_float(scoring.get("companions_time_value_eur_per_hour")) or 8.0,
-        airport_extras=voli.get("airport_extras", {})
+        airport_extras=flights_cfg.get("airport_extras", {})
     )
     return dflt, s
 
@@ -412,15 +412,15 @@ def parse_date_range_human(s: str) -> Tuple[date, date]:
     return d, d
 
 
-# ---------- costo attualizzato (configurabile) ----------
+# ---------- adjusted cost (configurable) ----------
 
-def early_departure_penalty(dep: datetime, scoring: VoliScoringConfig) -> float:
+def early_departure_penalty(dep: datetime, scoring: FlightsScoringConfig) -> float:
     t = hour_float(dep)
     ref = float(scoring.early_departure_ref_hour)
     return 0.0 if t >= ref else (ref - t) * float(scoring.early_departure_penalty_eur_per_hour)
 
 
-def late_arrival_penalty(arr: datetime, scoring: VoliScoringConfig) -> float:
+def late_arrival_penalty(arr: datetime, scoring: FlightsScoringConfig) -> float:
     t = hour_float(arr)
     start = float(scoring.late_arrival_start_hour)
     end_overnight = float(scoring.overnight_end_hour)
@@ -435,7 +435,7 @@ def late_arrival_penalty(arr: datetime, scoring: VoliScoringConfig) -> float:
     return 0.0
 
 
-def time_value_cost(total_duration_min: int, scoring: VoliScoringConfig) -> float:
+def time_value_cost(total_duration_min: int, scoring: FlightsScoringConfig) -> float:
     return (total_duration_min / 60.0) * float(scoring.time_value_eur_per_hour)
 
 
@@ -449,9 +449,9 @@ def connections_count(item: Dict[str, Any]) -> int:
     return 0
 
 
-# ---------- extra costi aeroporti ----------
+# ---------- airport extra costs ----------
 
-def airport_transfer_cost(scoring: VoliScoringConfig, one_way: bool, origin: str, destination: str) -> float:
+def airport_transfer_cost(scoring: FlightsScoringConfig, one_way: bool, origin: str, destination: str) -> float:
     if not scoring.airport_extras:
         return 0.0
     
@@ -709,7 +709,7 @@ async def build_roundtrip_rows(
     min_ticket_price: int,
     show_hidden: bool,
     no_cache: bool,
-    scoring: VoliScoringConfig,
+    scoring: FlightsScoringConfig,
     ground_extra_eur: float,
 ) -> List[RankedRow]:
 
@@ -844,7 +844,7 @@ async def build_oneway_rows(
     min_ticket_price: int,
     show_hidden: bool,
     no_cache: bool,
-    scoring: VoliScoringConfig,
+    scoring: FlightsScoringConfig,
     ground_extra_eur: float,
 ) -> List[RankedRow]:
 
@@ -959,7 +959,7 @@ async def build_rows_multi(
     min_ticket_price: int,
     show_hidden: bool,
     no_cache: bool,
-    scoring: VoliScoringConfig,
+    scoring: FlightsScoringConfig,
 ) -> List[RankedRow]:
 
     pairs = expand_pairs(origins, destinations)
@@ -1082,7 +1082,7 @@ def interactive_wizard() -> Tuple[RouteSelection, Tuple[date, date], Optional[Tu
 
     keys = list(ROUTE_PRESETS.keys())
 
-    # per evitare doppioni (alias), mostriamo una sola volta per label+origins+destinations
+    # avoid duplicates from aliases: show each label+origins+destinations only once
     shown: List[Tuple[str, Tuple[str, ...], Tuple[str, ...], str]] = []
     unique_keys: List[str] = []
     for k in keys:
@@ -1095,7 +1095,7 @@ def interactive_wizard() -> Tuple[RouteSelection, Tuple[date, date], Optional[Tu
 
     for i, k in enumerate(unique_keys, 1):
         p = ROUTE_PRESETS[k]
-        # descrizione: origini -> destinazioni (se multi, con /)
+        # description: origins -> destinations (joined with / when there are several)
         o_txt = "/".join(p.origins)
         d_txt = "/".join(p.destinations)
         eprint(f"{i}) {p.label}  ({o_txt} -> {d_txt})")
