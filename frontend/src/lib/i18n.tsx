@@ -287,6 +287,13 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
     }
   }, []);
 
+  // Keep <html lang> in sync so screen readers and search engines see the
+  // language actually on screen. The boot script in layout.tsx covers the
+  // first paint; this covers switching language during the session.
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem('app_language', lang);

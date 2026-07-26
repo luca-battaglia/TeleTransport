@@ -5,7 +5,7 @@ import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "TeleTransport",
-  description: "Ricerca Treni e Voli",
+  description: "Search and compare trains and flights ranked by their real cost, not just the ticket price.",
 };
 import { LanguageProvider } from "@/lib/i18n";
 
@@ -18,7 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
           <Script
-            id="theme-script"
+            id="preferences-script"
             strategy="beforeInteractive"
             dangerouslySetInnerHTML={{
               __html: `
@@ -27,6 +27,8 @@ export default function RootLayout({
                     var pref = localStorage.getItem('theme_preference') || 'system';
                     var isDark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                     if (isDark) { document.documentElement.classList.add('dark'); document.body.classList.add('dark'); }
+                    var lang = localStorage.getItem('app_language');
+                    if (lang === 'it' || lang === 'en') { document.documentElement.lang = lang; }
                   } catch (e) {}
                 })();
               `,
