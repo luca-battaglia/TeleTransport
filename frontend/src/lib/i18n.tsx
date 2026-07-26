@@ -8,6 +8,11 @@ interface Translations {
   [key: string]: string;
 }
 
+// Train station names are NEVER translated: the Trenitalia/LeFrecce location API
+// only matches italian names, so an english label ("Milan Central") would make the
+// train search fail or resolve to the wrong station. Shared by both dictionaries.
+const TRAIN_STATION_OPTIONS = "Torino ( Tutte Le Stazioni ),Alessandria,Zurigo HB,Bari Centrale,Lecce,Milano Centrale,Roma Termini,Napoli Centrale,Venezia S. Lucia,Bologna Centrale,Deiva Marina";
+
 const en: Translations = {
   // Navigation
   teletransport: "TeleTransport",
@@ -40,10 +45,10 @@ const en: Translations = {
   trains_btn: "Trains",
   flights_btn: "Flights",
   origin: "Origin",
-  origin_placeholder_train: "e.g., Zurich",
+  origin_placeholder_train: "e.g., Zurigo HB (italian name)",
   origin_placeholder_flight: "e.g., Zurich",
   destination: "Destination",
-  dest_placeholder_train: "e.g., Rome",
+  dest_placeholder_train: "e.g., Roma Termini (italian name)",
   dest_placeholder_flight: "e.g., Rome",
   swap_btn: "Swap",
   outbound_range: "Outbound Range",
@@ -111,13 +116,13 @@ const en: Translations = {
   language: "Language",
   language_en: "English",
   language_it: "Italiano",
-  settings_origin_train: "e.g., Rome Termini",
-  settings_dest_train: "e.g., Milan Central",
+  settings_origin_train: "e.g., Roma Termini",
+  settings_dest_train: "e.g., Milano Centrale",
   settings_origin_flight: "e.g., Rome",
   settings_dest_flight: "e.g., Milan",
   settings_id_placeholder: "ID (e.g., booking)",
   reminder_text_placeholder: "Reminder text",
-  options_trains: "Turin (All Stations),Alessandria,Zurich HB,Bari Centrale,Lecce,Milan Central,Rome Termini,Naples Central,Venice S. Lucia,Bologna Central,Deiva Marina",
+  options_trains: TRAIN_STATION_OPTIONS,
   options_flights: "Zurich,Bari,Brindisi,Turin,Milan Linate,Milan Malpensa,Genoa,Rome,Naples,Catania,Palermo,Venice,Bologna",
   export_btn: "Export",
   import_btn: "Import",
@@ -241,7 +246,7 @@ const it: Translations = {
   settings_dest_flight: "es. Milano",
   settings_id_placeholder: "ID (es. booking)",
   reminder_text_placeholder: "Testo del promemoria",
-  options_trains: "Torino ( Tutte Le Stazioni ),Alessandria,Zurigo HB,Bari Centrale,Lecce,Milano Centrale,Roma Termini,Napoli Centrale,Venezia S. Lucia,Bologna Centrale,Deiva Marina",
+  options_trains: TRAIN_STATION_OPTIONS,
   options_flights: "Zurigo,Bari,Brindisi,Torino,Milano Linate,Milano Malpensa,Genova,Roma,Napoli,Catania,Palermo,Venezia,Bologna",
   export_btn: "Esporta",
   import_btn: "Importa",
