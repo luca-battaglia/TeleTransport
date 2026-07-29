@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark, Clock } from 'lucide-react';
+import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark, Clock, ArrowDownNarrowWide, CalendarDays, Undo2, RotateCcw } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
 import HistoryModal, { HistoryEntry } from '@/components/HistoryModal';
 import DatePicker, { registerLocale } from 'react-datepicker';
@@ -17,6 +17,39 @@ registerLocale('it', it);
 // Months rendered in the date popup, which scrolls vertically (see globals.css).
 const MONTHS_SHOWN = 12;
 const MAX_RANGE_DAYS = 14;
+
+type SortOrder = 'best' | 'day';
+
+// The fields the two backends have in common: trains send dep/arr/duration_min,
+// flights send out_dep/out_arr/total_duration_min.
+type SolutionRow = {
+  dep?: string;
+  arr?: string;
+  out_dep?: string;
+  out_arr?: string;
+  duration_min?: number;
+  total_duration_min?: number;
+  adjusted_cost?: number;
+};
+
+const departureOf = (r: SolutionRow) => new Date(r.out_dep || r.dep || '');
+const durationOf = (r: SolutionRow) => r.duration_min ?? r.total_duration_min ?? 0;
+
+// Local midnight of the departure, so groups match the date printed in the row.
+const dayStartOf = (r: SolutionRow) => {
+  const d = departureOf(r);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+};
+
+// Duration breaks cost ties, mirroring the backend ranking, so 'best' reproduces
+// the order the API already returned.
+const compareRows = (a: SolutionRow, b: SolutionRow, order: SortOrder) => {
+  if (order === 'day') {
+    const byDay = dayStartOf(a) - dayStartOf(b);
+    if (byDay !== 0) return byDay;
+  }
+  return ((a.adjusted_cost || 0) - (b.adjusted_cost || 0)) || (durationOf(a) - durationOf(b));
+};
 
 export default function Dashboard() {
   const { t, language } = useLanguage();
@@ -42,6 +75,10 @@ export default function Dashboard() {
   const [flightResults, setFlightResults] = useState<any[]>([]);
   const [trainError, setTrainError] = useState<string | null>(null);
   const [flightError, setFlightError] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('best');
+  // Positions in the unsorted result arrays, newest exclusion last so undo can pop it.
+  const [trainExcluded, setTrainExcluded] = useState<number[]>([]);
+  const [flightExcluded, setFlightExcluded] = useState<number[]>([]);
   const [reminders, setReminders] = useState<{key: string, text: string, target?: string}[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const trainAbortControllerRef = useRef<AbortController | null>(null);
@@ -50,6 +87,21 @@ export default function Dashboard() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [trainHistory, setTrainHistory] = useState<HistoryEntry[]>([]);
   const [flightHistory, setFlightHistory] = useState<HistoryEntry[]>([]);
+
+  const results = mode === 'trains' ? trainResults : flightResults;
+  const excluded = mode === 'trains' ? trainExcluded : flightExcluded;
+  const setExcluded = mode === 'trains' ? setTrainExcluded : setFlightExcluded;
+
+  const visibleRows = useMemo(() => {
+    const hidden = new Set(excluded);
+    return results
+      .map((row, index) => ({ row, index }))
+      .filter(entry => !hidden.has(entry.index))
+      .sort((a, b) => compareRows(a.row, b.row, sortOrder));
+  }, [results, excluded, sortOrder]);
+
+  // Excluding a row pulls the next one into view: the cut happens after filtering.
+  const pageRows = visibleRows.slice(0, itemsPerPage);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -74,12 +126,11 @@ export default function Dashboard() {
   }, []);
 
     const handleCopyTable = () => {
-    const res = mode === 'trains' ? trainResults : flightResults;
-    if (res.length === 0) return;
-    
+    if (pageRows.length === 0) return;
+
     let text = "| Route | Departure | Arrival | Duration | Price | Adj Cost |\n";
     text += "|---|---|---|---|---|---|\n";
-    res.slice(0, itemsPerPage).forEach(r => {
+    pageRows.forEach(({ row: r }) => {
       const route = r.route || `${r.origin} -> ${r.destination}`;
       const depTime = r.out_dep || r.dep;
       const arrTime = r.out_arr || r.arr;
@@ -139,10 +190,12 @@ export default function Dashboard() {
       setTrainSearched(false);
       setTrainError(null);
       setTrainResults([]);
+      setTrainExcluded([]);
     } else {
       setFlightSearched(false);
       setFlightError(null);
       setFlightResults([]);
+      setFlightExcluded([]);
     }
 
     const formatDate = (date: Date | null) => {
@@ -302,7 +355,10 @@ export default function Dashboard() {
         if (parsed.flightResults) setFlightResults(parsed.flightResults);
         if (parsed.trainError !== undefined) setTrainError(parsed.trainError);
         if (parsed.flightError !== undefined) setFlightError(parsed.flightError);
-        
+        if (parsed.sortOrder === 'best' || parsed.sortOrder === 'day') setSortOrder(parsed.sortOrder);
+        if (parsed.trainExcluded) setTrainExcluded(parsed.trainExcluded);
+        if (parsed.flightExcluded) setFlightExcluded(parsed.flightExcluded);
+
         if (parsed.depDateRange) {
           setDepDateRange([
             parsed.depDateRange[0] ? new Date(parsed.depDateRange[0]) : null,
@@ -393,6 +449,7 @@ export default function Dashboard() {
       trainSearched, flightSearched,
       trainResults, flightResults,
       trainError, flightError,
+      sortOrder, trainExcluded, flightExcluded,
       depDateRange: [
         depDateRange[0] ? depDateRange[0].toISOString() : null,
         depDateRange[1] ? depDateRange[1].toISOString() : null
@@ -403,7 +460,7 @@ export default function Dashboard() {
       ]
     };
     sessionStorage.setItem('dashboard_state', JSON.stringify(stateToSave));
-  }, [mounted, mode, origins, destinations, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, depDateRange, retDateRange]);
+  }, [mounted, mode, origins, destinations, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, sortOrder, trainExcluded, flightExcluded, depDateRange, retDateRange]);
 
   if (!mounted) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}><Loader2 className="animate-spin" size={32} /></div>;
@@ -731,16 +788,71 @@ export default function Dashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-              <button 
-                type="button"
-                className="btn-outline"
-                onClick={handleCopyTable}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
-                title={t("copy_table")}
-              >
-                <Copy size={18} />
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button
+                  type="button"
+                  className={sortOrder === 'best' ? 'btn-primary' : 'btn-outline'}
+                  onClick={() => setSortOrder('best')}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
+                  title={t("sort_best")}
+                  aria-pressed={sortOrder === 'best'}
+                >
+                  <ArrowDownNarrowWide size={18} />
+                </button>
+                <button
+                  type="button"
+                  className={sortOrder === 'day' ? 'btn-primary' : 'btn-outline'}
+                  onClick={() => setSortOrder('day')}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
+                  title={t("sort_day")}
+                  aria-pressed={sortOrder === 'day'}
+                >
+                  <CalendarDays size={18} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <AnimatePresence>
+                  {excluded.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.15 }}
+                      style={{ display: 'flex', gap: '4px' }}
+                    >
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        onClick={() => setExcluded(prev => prev.slice(0, -1))}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
+                        title={t("restore_last")}
+                      >
+                        <Undo2 size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        onClick={() => setExcluded([])}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', borderRadius: '6px' }}
+                        title={t("restore_all")}
+                      >
+                        <RotateCcw size={18} />
+                        <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{excluded.length}</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={handleCopyTable}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
+                  title={t("copy_table")}
+                >
+                  <Copy size={18} />
+                </button>
+              </div>
             </div>
             <div className="table-container">
             <table>
@@ -752,11 +864,20 @@ export default function Dashboard() {
                   <th>{t("duration")}</th>
                   <th>{t("price")}</th>
                   <th>{t("adj_cost")}</th>
+                  <th style={{ width: '48px' }} />
                 </tr>
               </thead>
               <tbody>
-                {(mode === 'trains' ? trainResults : flightResults).slice(0, itemsPerPage).map((r, i) => (
-                  <tr key={i}>
+                <AnimatePresence initial={false}>
+                {pageRows.map(({ row: r, index }, i) => (
+                  <motion.tr
+                    key={index}
+                    className={sortOrder === 'day' && i > 0 && dayStartOf(r) !== dayStartOf(pageRows[i - 1].row) ? 'day-start' : undefined}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
                     <td>
                       <span style={{ fontWeight: 500 }}>
                         {r.route || `${r.origin} → ${r.destination}`}
@@ -768,8 +889,19 @@ export default function Dashboard() {
                     <td>{Math.floor((r.duration_min || r.total_duration_min) / 60)}h {(r.duration_min || r.total_duration_min) % 60}m</td>
                     <td style={{ fontWeight: 600 }}>{r.price_eur} €</td>
                     <td style={{ color: 'var(--accent)' }}>{r.adjusted_cost} €</td>
-                  </tr>
+                    <td>
+                      <button
+                        type="button"
+                        className="row-action"
+                        onClick={() => setExcluded(prev => prev.includes(index) ? prev : [...prev, index])}
+                        title={t("exclude_row")}
+                      >
+                        <X size={16} />
+                      </button>
+                    </td>
+                  </motion.tr>
                 ))}
+                </AnimatePresence>
               </tbody>
             </table>
             </div>
@@ -809,10 +941,12 @@ export default function Dashboard() {
             setTrainResults(entry.results);
             setTrainSearched(true);
             setTrainError(null);
+            setTrainExcluded([]);
           } else {
             setFlightResults(entry.results);
             setFlightSearched(true);
             setFlightError(null);
+            setFlightExcluded([]);
           }
         }}
       />
