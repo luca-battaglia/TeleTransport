@@ -210,6 +210,16 @@ The named target and `rel="noopener"` are mutually exclusive: per the HTML spec 
 
 Ctrl+click, ⌘+click and middle click are unaffected: the browser overrides the target and opens a separate background tab.
 
+### Staying logged in on Trenitalia (optional)
+
+LeFrecce splits its login across two storages. The credential (`b2c.jwttoken`, `aurelia_authentication`) lives in `localStorage` and is shared by every tab. The signed-in state the UI reads — the Aurelia store, user profile included — is persisted to `sessionStorage` under `session`, which is per tab and starts empty in a tab opened from another site. The app never rebuilds the store from the credential, so a fresh tab shows you logged out while holding a valid token.
+
+That is why a booking link opens signed in when an operator tab is already around, and signed out when it is not. Nothing in this project can change it: seeding `sessionStorage` on `lefrecce.it` requires code running on that origin.
+
+`userscripts/lefrecce-session-restore.user.js` does exactly that. Install [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey), open the file, and let the extension pick it up. It mirrors the store into `localStorage` and seeds it back into tabs that start without one, dropping the backup on logout, on an expired token, and after 30 minutes — the same idle window the site itself enforces before wiping its own data.
+
+It has not been tested against a real logged-in account. It touches the auth state of a site where you spend money, so check that the reserved area and the purchase flow behave normally before relying on it.
+
 ---
 
 ## Security notes

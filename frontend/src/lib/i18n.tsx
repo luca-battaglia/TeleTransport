@@ -50,6 +50,8 @@ const en: Translations = {
   guide_exclude_desc: "The × at the end of a row drops that solution from the table and the next best one moves up into its place. Nothing is lost: the curved arrow brings back the last one you hid and the circular arrow, with the counter beside it, restores them all. A new search clears the hidden ones.",
   guide_row_link: "Opening a solution",
   guide_row_link_desc: "The route of every row is a link to the operator's own results for that route on that day, with the search already filled in: Trenitalia for trains, Google Flights for flights. A plain click always reuses the same operator tab instead of opening one per solution, so you can work through the table without drowning in tabs; ctrl+click (⌘+click on a Mac) or a middle click still opens a separate background tab when you want to compare two days side by side. The train link asks for one adult and is anchored to the hour the solution departs, so adjust passengers and fares once you are there. Prices on the operator's site are live and may have moved since your search.",
+  guide_operator_login: "Staying logged in on Trenitalia",
+  guide_operator_login_desc: "Trenitalia keeps your credential in one place and the page's signed-in state in another, and the second one belongs to a single tab. So a booking link opens already signed in when a Trenitalia tab is around, and signed out when none is. That is Trenitalia's own behaviour and nothing here can change it, since only code running on their site could fix it. The repository ships an optional userscript that does, under userscripts/, if it bothers you enough.",
   close: "Close",
 
   // Main Page
@@ -194,6 +196,8 @@ const it: Translations = {
   guide_exclude_desc: "La × in fondo a una riga la toglie dalla tabella e al suo posto sale la successiva migliore. Niente va perso: la freccia curva rimette l'ultima che hai nascosto e la freccia circolare, con il contatore accanto, le ripristina tutte. Una nuova ricerca azzera le esclusioni.",
   guide_row_link: "Aprire una soluzione",
   guide_row_link_desc: "La rotta di ogni riga è un link ai risultati dell'operatore per quella tratta in quel giorno, con la ricerca già compilata: Trenitalia per i treni, Google Flights per i voli. Un click normale riusa sempre la stessa scheda dell'operatore invece di aprirne una per soluzione, così puoi scorrere la tabella senza affogare nelle schede; ctrl+click (⌘+click su Mac) o il click centrale aprono comunque una scheda separata in secondo piano, quando vuoi confrontare due giorni affiancati. Il link dei treni chiede un adulto ed è ancorato all'ora di partenza della soluzione, quindi passeggeri e tariffe si sistemano una volta arrivato lì. I prezzi sul sito dell'operatore sono in tempo reale e possono essersi mossi dalla tua ricerca.",
+  guide_operator_login: "Restare loggato su Trenitalia",
+  guide_operator_login_desc: "Trenitalia tiene le tue credenziali in un posto e lo stato di login della pagina in un altro, e il secondo appartiene a una singola scheda. Per questo un link di prenotazione si apre già loggato se una scheda Trenitalia è aperta, e sloggato se non ce n'è nessuna. È comportamento di Trenitalia e da qui non si può cambiare, perché solo del codice in esecuzione sul loro sito potrebbe sistemarlo. Nel repository c'è uno userscript opzionale che lo fa, sotto userscripts/, se la cosa ti dà abbastanza fastidio.",
   close: "Chiudi",
 
   // Main Page
