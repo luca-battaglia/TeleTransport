@@ -1027,11 +1027,21 @@ export default function Dashboard() {
                     transition={{ duration: 0.18 }}
                   >
                     <td>
+                      {/*
+                        A named target rather than _blank, so every click reuses one
+                        operator tab instead of piling up a tab per solution: the tab
+                        keeps whatever it holds in sessionStorage, including the state
+                        LeFrecce parks under its own `session` key.
+                        This is why there is no rel here. Per spec `noopener` forces a
+                        fresh browsing context and drops the name, which would defeat
+                        the reuse, and `noreferrer` implies `noopener`. The cost is that
+                        the operator gets a window.opener handle on this tab; the only
+                        two destinations are Trenitalia and Google.
+                      */}
                       {r.booking_url ? (
                         <a
                           href={r.booking_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          target={mode === 'trains' ? 'trenitalia' : 'googleflights'}
                           className="route-link"
                           title={mode === 'trains' ? t("open_row_trenitalia") : t("open_row_flights")}
                         >

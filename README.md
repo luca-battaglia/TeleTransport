@@ -202,6 +202,14 @@ Station names are resolved through the same locations endpoint this project uses
 
 This is an undocumented entry point. It is one HTTP call away from being verified if it ever breaks: open a link, confirm you land on `#/search-results`. Nothing else in the app depends on it.
 
+### Why the links carry no `rel`
+
+Each link opens into a **named** target (`trenitalia`, `googleflights`) rather than `_blank`, so a session of clicking works through one operator tab instead of leaving a tab per solution behind. That tab keeps its `sessionStorage` across navigations, including the state LeFrecce parks under its own `session` key.
+
+The named target and `rel="noopener"` are mutually exclusive: per the HTML spec `noopener` picks a fresh browsing context and does not apply the name, and `noreferrer` implies `noopener`. Measured — with `rel="noopener noreferrer"` two clicks produce two tabs, without it they reuse one. So the links carry no `rel`, and the cost is that the destination gets a `window.opener` handle on the app's tab. The only two destinations are Trenitalia and Google.
+
+Ctrl+click, ⌘+click and middle click are unaffected: the browser overrides the target and opens a separate background tab.
+
 ---
 
 ## Security notes
