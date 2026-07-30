@@ -13,6 +13,10 @@ export interface HistoryEntry {
   depEndStr?: string;
   retStartStr?: string;
   retEndStr?: string;
+  // Every stretch the search covered. Absent on entries saved before pools
+  // existed, where the depStartStr/depEndStr span is the whole search.
+  depRanges?: { start: string; end: string }[];
+  retRanges?: { start: string; end: string }[];
   oneWay: boolean;
   results: any[];
 }

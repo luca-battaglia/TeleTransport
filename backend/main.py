@@ -1,7 +1,8 @@
+import asyncio
 import json
 import hashlib
-from datetime import date
-from typing import List, Optional
+from datetime import date, timedelta
+from typing import List, Optional, Tuple
 
 import typing
 if hasattr(typing, "_eval_type"):
@@ -50,23 +51,89 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class TrainRequest(BaseModel):
+# A search may cover several disjoint stretches of days (e.g. 24-26 Aug plus
+# 31 Aug-2 Sep), so every day in the pool costs one upstream lookup per route.
+# The cap keeps a single request from fanning out without bound.
+MAX_SEARCH_DAYS = 14
+
+
+class DateRange(BaseModel):
+    start: date
+    end: date
+
+
+class SearchRequest(BaseModel):
     origins: List[str]
     destinations: List[str]
-    dep_start: date
-    dep_end: date
+    dep_ranges: Optional[List[DateRange]] = None
+    ret_ranges: Optional[List[DateRange]] = None
+    # Single-range form. Superseded by *_ranges but still accepted: the frontend
+    # and this backend deploy independently, so one can be a version behind.
+    dep_start: Optional[date] = None
+    dep_end: Optional[date] = None
     ret_start: Optional[date] = None
     ret_end: Optional[date] = None
     one_way: bool = False
 
-class FlightRequest(BaseModel):
-    origins: List[str]
-    destinations: List[str]
-    dep_start: date
-    dep_end: date
-    ret_start: Optional[date] = None
-    ret_end: Optional[date] = None
-    one_way: bool = False
+
+class TrainRequest(SearchRequest):
+    pass
+
+
+class FlightRequest(SearchRequest):
+    pass
+
+
+def resolve_ranges(
+    ranges: Optional[List[DateRange]],
+    start: Optional[date],
+    end: Optional[date],
+) -> List[Tuple[date, date]]:
+    """Normalize a date pool into sorted, non-overlapping (start, end) pairs."""
+    raw: List[Tuple[date, date]] = []
+    if ranges:
+        raw = [(r.start, r.end) if r.start <= r.end else (r.end, r.start) for r in ranges]
+    elif start:
+        raw = [(start, end or start)]
+    if not raw:
+        return []
+
+    raw.sort()
+    merged = [raw[0]]
+    for cur_start, cur_end in raw[1:]:
+        last_start, last_end = merged[-1]
+        # Touching ranges merge as well: two adjacent stretches are one search,
+        # otherwise the shared boundary day would be looked up twice.
+        if cur_start <= last_end + timedelta(days=1):
+            merged[-1] = (last_start, max(last_end, cur_end))
+        else:
+            merged.append((cur_start, cur_end))
+    return merged
+
+
+def count_days(ranges: List[Tuple[date, date]]) -> int:
+    return sum((end - start).days + 1 for start, end in ranges)
+
+
+def resolve_search_window(req: SearchRequest) -> Tuple[List[Tuple[date, date]], List[Tuple[date, date]]]:
+    """Outbound and return pools for a request, rejecting anything unusable."""
+    dep_ranges = resolve_ranges(req.dep_ranges, req.dep_start, req.dep_end)
+    if not dep_ranges:
+        raise HTTPException(status_code=400, detail="An outbound date is required.")
+
+    ret_ranges: List[Tuple[date, date]] = []
+    if not req.one_way:
+        ret_ranges = resolve_ranges(req.ret_ranges, req.ret_start, req.ret_end)
+
+    for pool in (dep_ranges, ret_ranges):
+        if count_days(pool) > MAX_SEARCH_DAYS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"A search may cover at most {MAX_SEARCH_DAYS} days.",
+            )
+
+    return dep_ranges, ret_ranges
+
 
 def override_config(base_dict: dict, overrides: dict) -> dict:
     import copy
@@ -138,19 +205,24 @@ async def get_trains(
             pass
             
     cfg_defaults, cfg_scoring = parse_trains_config(cfg_dict)
-    
+
     force_no_cache = cfg_dict.get("no_cache", False) or overrides.get("no_cache", False)
-    
+
+    dep_ranges, ret_ranges = resolve_search_window(req)
+
     tasks = []
-    # Build tasks for all origin/dest pairs
+    # One task per origin/dest pair per stretch of days: search_ranked_solutions
+    # walks each task day by day and ranks everything it collects together.
     for origin in req.origins:
         for dest in req.destinations:
             route = TrainRoute(origin, dest)
-            tasks.append(TrainSearchTask(route=route, d1=req.dep_start, d2=req.dep_end))
-            
-            if not req.one_way and req.ret_start and req.ret_end:
+            for d1, d2 in dep_ranges:
+                tasks.append(TrainSearchTask(route=route, d1=d1, d2=d2))
+
+            if ret_ranges:
                 ret_route = TrainRoute(dest, origin)
-                tasks.append(TrainSearchTask(route=ret_route, d1=req.ret_start, d2=req.ret_end))
+                for d1, d2 in ret_ranges:
+                    tasks.append(TrainSearchTask(route=ret_route, d1=d1, d2=d2))
 
     try:
         ranked = await search_ranked_solutions(
@@ -211,10 +283,9 @@ async def get_flights(
             pass
             
     cfg_defaults, cfg_scoring = parse_flights_config(cfg_dict)
-    
-    ret_rng = None
-    if not req.one_way and req.ret_start and req.ret_end:
-        ret_rng = (req.ret_start, req.ret_end)
+
+    dep_ranges, ret_ranges = resolve_search_window(req)
+    one_way = req.one_way or not ret_ranges
 
     def map_to_iata(name: str) -> str:
         n = name.lower()
@@ -234,35 +305,49 @@ async def get_flights(
     mapped_origins = [map_to_iata(o) for o in req.origins]
     mapped_destinations = [map_to_iata(d) for d in req.destinations]
 
+    # A round trip pairs an outbound stretch with a return stretch, so every
+    # combination is its own lookup. Day counts are capped, which bounds the fan-out
+    # to what a single contiguous range of the same length already cost.
+    ret_combos: List[Optional[Tuple[date, date]]] = list(ret_ranges) if ret_ranges else [None]
+
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            rows = await build_rows_multi(
-                client=client,
-                api_key=api_key,
-                origins=mapped_origins,
-                destinations=mapped_destinations,
-                dep_start=req.dep_start,
-                dep_end=req.dep_end,
-                ret_rng=ret_rng,
-                one_way=req.one_way or (ret_rng is None),
-                currency=cfg_defaults.currency,
-                hl=cfg_defaults.hl,
-                gl=cfg_defaults.gl,
-                deep_search=cfg_defaults.deep_search,
-                top_outbounds=cfg_defaults.top_outbounds,
-                top_returns=cfg_defaults.top_returns,
-                top_flights=cfg_defaults.top_flights,
-                min_ticket_price=cfg_defaults.min_price,
-                show_hidden=cfg_defaults.show_hidden,
-                no_cache=cfg_defaults.no_cache,
-                scoring=cfg_scoring,
-            )
-        
+            chunks = await asyncio.gather(*[
+                build_rows_multi(
+                    client=client,
+                    api_key=api_key,
+                    origins=mapped_origins,
+                    destinations=mapped_destinations,
+                    dep_start=dep_start,
+                    dep_end=dep_end,
+                    ret_rng=ret_rng,
+                    one_way=one_way,
+                    currency=cfg_defaults.currency,
+                    hl=cfg_defaults.hl,
+                    gl=cfg_defaults.gl,
+                    deep_search=cfg_defaults.deep_search,
+                    top_outbounds=cfg_defaults.top_outbounds,
+                    top_returns=cfg_defaults.top_returns,
+                    top_flights=cfg_defaults.top_flights,
+                    min_ticket_price=cfg_defaults.min_price,
+                    show_hidden=cfg_defaults.show_hidden,
+                    no_cache=cfg_defaults.no_cache,
+                    scoring=cfg_scoring,
+                )
+                for dep_start, dep_end in dep_ranges
+                for ret_rng in ret_combos
+            ])
+
+        rows = [row for chunk in chunks for row in chunk]
+
         # Deduplicate
         from core.flights import dedup_rows
         if cfg_defaults.dedup:
-            rows = dedup_rows(rows, one_way=req.one_way or (ret_rng is None))
-            
+            rows = dedup_rows(rows, one_way=one_way)
+
+        # Each chunk arrives sorted on its own, so the merge has to be re-ranked.
+        rows.sort(key=lambda r: (r.adjusted_cost, r.total_duration_min))
+
         # Serialize datetime objects
         results = []
         for r in rows:

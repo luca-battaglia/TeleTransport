@@ -69,6 +69,22 @@ export default function GuideModal({ isOpen, onClose }: GuideModalProps) {
           </li>
         </ul>
 
+        <h3 style={{ color: 'var(--accent)', marginBottom: '12px' }}>{t('guide_dates_title')}</h3>
+        <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+          <li>
+            <strong>{t('guide_date_pool')}:</strong> {t('guide_date_pool_desc')}
+          </li>
+          <li>
+            <strong>{t('guide_sort_order')}:</strong> {t('guide_sort_order_desc')}
+          </li>
+          <li>
+            <strong>{t('guide_results_count')}:</strong> {t('guide_results_count_desc')}
+          </li>
+          <li>
+            <strong>{t('guide_exclude')}:</strong> {t('guide_exclude_desc')}
+          </li>
+        </ul>
+
         <h3 style={{ color: 'var(--accent)', marginBottom: '12px' }}>{t('guide_serpapi_title')}</h3>
         <p style={{ color: 'var(--text-muted)', marginBottom: '24px', lineHeight: '1.6' }}>
           {t('guide_serpapi_desc1')} <a href="https://serpapi.com/users/sign_up" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>serpapi.com</a>{t('guide_serpapi_desc2')}

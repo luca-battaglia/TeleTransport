@@ -4,21 +4,74 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchTrains, fetchFlights, fetchConfig } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark, Clock, ArrowDownNarrowWide, CalendarDays, Undo2, RotateCcw } from 'lucide-react';
+import { Search, Train, Plane, Loader2, Calendar, ArrowLeftRight, Square, Copy, X, Plus, Bookmark, Clock, ArrowDownNarrowWide, CalendarDays, CalendarPlus, Undo2, RotateCcw } from 'lucide-react';
 import AutocompleteInput from '@/components/AutocompleteInput';
 import HistoryModal, { HistoryEntry } from '@/components/HistoryModal';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { it } from 'date-fns/locale/it';
-import { differenceInCalendarDays } from 'date-fns';
+import { addDays } from 'date-fns';
 
 registerLocale('it', it);
 
 // Months rendered in the date popup, which scrolls vertically (see globals.css).
 const MONTHS_SHOWN = 12;
+// Total days a search may cover, counted across every stretch in the pool.
+// Mirrors MAX_SEARCH_DAYS in the backend, which rejects anything above it.
 const MAX_RANGE_DAYS = 14;
 
 type SortOrder = 'best' | 'day';
+
+// One stretch of days in a search pool, as yyyy-mm-dd so it survives a JSON
+// round-trip through sessionStorage unchanged.
+type DateRange = { start: string; end: string };
+
+const formatDateKey = (date: Date) => {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const parseDateKey = (key: string) => new Date(`${key}T00:00:00`);
+
+const rangeFromPicker = (picker: [Date | null, Date | null]): DateRange | null => {
+  const [start, end] = picker;
+  if (!start) return null;
+  return { start: formatDateKey(start), end: formatDateKey(end || start) };
+};
+
+// What the search actually covers: the saved stretches plus whatever the picker
+// currently holds, so ignoring the pool leaves the original single-range flow intact.
+const collectRanges = (pool: DateRange[], picker: [Date | null, Date | null]): DateRange[] => {
+  const ranges = [...pool];
+  const current = rangeFromPicker(picker);
+  if (current && !ranges.some(r => r.start === current.start && r.end === current.end)) {
+    ranges.push(current);
+  }
+  return ranges.sort((a, b) => a.start.localeCompare(b.start));
+};
+
+// Compact enough for a chip; the picker itself still shows full dates.
+const formatRangeLabel = (r: DateRange) => {
+  const short = (key: string) => {
+    const d = parseDateKey(key);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  return r.start === r.end ? short(r.start) : `${short(r.start)} – ${short(r.end)}`;
+};
+
+// Distinct days, so overlapping stretches are not counted twice against the cap.
+const countDays = (ranges: DateRange[]) => {
+  const days = new Set<string>();
+  ranges.forEach(r => {
+    const end = parseDateKey(r.end);
+    for (let d = parseDateKey(r.start); d <= end; d = addDays(d, 1)) {
+      days.add(formatDateKey(d));
+    }
+  });
+  return days.size;
+};
 
 // The fields the two backends have in common: trains send dep/arr/duration_min,
 // flights send out_dep/out_arr/total_duration_min.
@@ -63,6 +116,8 @@ export default function Dashboard() {
   const [depDateRange, setDepDateRange] = useState<[Date | null, Date | null]>([new Date(), null]);
   const [depDatePristine, setDepDatePristine] = useState(true);
   const [retDateRange, setRetDateRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [depRangePool, setDepRangePool] = useState<DateRange[]>([]);
+  const [retRangePool, setRetRangePool] = useState<DateRange[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [oneWay, setOneWay] = useState(true);
   const [savedSearches, setSavedSearches] = useState<{trains: {origins: string[], destinations: string[]}[], flights: {origins: string[], destinations: string[]}[]}>({ trains: [], flights: [] });
@@ -100,8 +155,63 @@ export default function Dashboard() {
       .sort((a, b) => compareRows(a.row, b.row, sortOrder));
   }, [results, excluded, sortOrder]);
 
-  // Excluding a row pulls the next one into view: the cut happens after filtering.
-  const pageRows = visibleRows.slice(0, itemsPerPage);
+  // The cut happens after filtering, so excluding a row pulls the next one into
+  // view. Grouped by day the count applies per day rather than to the whole table.
+  const pageRows = useMemo(() => {
+    if (sortOrder === 'best') return visibleRows.slice(0, itemsPerPage);
+    const takenPerDay = new Map<number, number>();
+    return visibleRows.filter(({ row }) => {
+      const day = dayStartOf(row);
+      const taken = takenPerDay.get(day) ?? 0;
+      if (taken >= itemsPerPage) return false;
+      takenPerDay.set(day, taken + 1);
+      return true;
+    });
+  }, [visibleRows, itemsPerPage, sortOrder]);
+
+  const addRangeToPool = (
+    picker: [Date | null, Date | null],
+    setPicker: (value: [Date | null, Date | null]) => void,
+    setPool: React.Dispatch<React.SetStateAction<DateRange[]>>
+  ) => {
+    const entry = rangeFromPicker(picker);
+    if (!entry) return;
+    setPool(prev => (
+      prev.some(r => r.start === entry.start && r.end === entry.end)
+        ? prev
+        : [...prev, entry].sort((a, b) => a.start.localeCompare(b.start))
+    ));
+    // Clearing the picker keeps the added stretch from also counting as the
+    // current selection, which would show it twice.
+    setPicker([null, null]);
+  };
+
+  const renderRangePool = (
+    pool: DateRange[],
+    setPool: React.Dispatch<React.SetStateAction<DateRange[]>>
+  ) => {
+    if (pool.length === 0) return null;
+    return (
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+        {pool.map(r => (
+          <div
+            key={`${r.start}_${r.end}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', padding: '4px 10px', borderRadius: '16px', fontSize: '13px' }}
+          >
+            <span>{formatRangeLabel(r)}</span>
+            <button
+              type="button"
+              onClick={() => setPool(prev => prev.filter(x => !(x.start === r.start && x.end === r.end)))}
+              style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 0, display: 'flex' }}
+              title={t("remove")}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -198,47 +308,32 @@ export default function Dashboard() {
       setFlightExcluded([]);
     }
 
-    const formatDate = (date: Date | null) => {
-      if (!date) return '';
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    };
+    const depRanges = collectRanges(depRangePool, depDateRange);
+    const retRanges = oneWay ? [] : collectRanges(retRangePool, retDateRange);
 
-    const depStartStr = formatDate(depDateRange[0]);
-    const depEndStr = formatDate(depDateRange[1]);
-    const retStartStr = formatDate(retDateRange[0]);
-    const retEndStr = formatDate(retDateRange[1]);
+    const depStartStr = depRanges[0]?.start || '';
+    const depEndStr = depRanges[depRanges.length - 1]?.end || '';
+    const retStartStr = retRanges[0]?.start || '';
+    const retEndStr = retRanges[retRanges.length - 1]?.end || '';
 
-    if (!depStartStr) {
+    if (depRanges.length === 0) {
       if (mode === 'trains') setTrainError(t("err_outbound")); else setFlightError(t("err_outbound"));
       mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
       return;
     }
-    
-    if (!oneWay && !retStartStr) {
+
+    if (!oneWay && retRanges.length === 0) {
       if (mode === 'trains') setTrainError(t("err_return")); else setFlightError(t("err_return"));
       mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
       return;
     }
 
     const rangeError = t("err_max_range").replace('{days}', String(MAX_RANGE_DAYS));
-    
-    if (depDateRange[0] && depDateRange[1]) {
-      if (differenceInCalendarDays(depDateRange[1], depDateRange[0]) > MAX_RANGE_DAYS) {
-        if (mode === 'trains') setTrainError(rangeError); else setFlightError(rangeError);
-        mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
-        return;
-      }
-    }
-    
-    if (!oneWay && retDateRange[0] && retDateRange[1]) {
-      if (differenceInCalendarDays(retDateRange[1], retDateRange[0]) > MAX_RANGE_DAYS) {
-        if (mode === 'trains') setTrainError(rangeError); else setFlightError(rangeError);
-        mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
-        return;
-      }
+
+    if (countDays(depRanges) > MAX_RANGE_DAYS || countDays(retRanges) > MAX_RANGE_DAYS) {
+      if (mode === 'trains') setTrainError(rangeError); else setFlightError(rangeError);
+      mode === 'trains' ? setTrainLoading(false) : setFlightLoading(false);
+      return;
     }
 
     if (mode === 'flights') {
@@ -257,6 +352,10 @@ export default function Dashboard() {
       const payload = {
         origins: origins.filter(Boolean),
         destinations: destinations.filter(Boolean),
+        dep_ranges: depRanges,
+        ret_ranges: retRanges.length > 0 ? retRanges : undefined,
+        // The span enclosing the pool, for a backend still on the single-range
+        // payload: it searches a superset rather than failing.
         dep_start: depStartStr,
         dep_end: depEndStr || depStartStr,
         ret_start: retStartStr || undefined,
@@ -274,7 +373,8 @@ export default function Dashboard() {
         if (res.data && res.data.length > 0) {
           const entry: HistoryEntry = {
             timestamp: Date.now(), origin: origins[0], destination: destinations[0],
-            depStartStr, depEndStr, retStartStr, retEndStr, oneWay, results: res.data
+            depStartStr, depEndStr, retStartStr, retEndStr,
+            depRanges, retRanges, oneWay, results: res.data
           };
           setTrainHistory(prev => {
             const next = [entry, ...prev].slice(0, 10);
@@ -288,7 +388,8 @@ export default function Dashboard() {
         if (res.data && res.data.length > 0) {
           const entry: HistoryEntry = {
             timestamp: Date.now(), origin: origins[0], destination: destinations[0],
-            depStartStr, depEndStr, retStartStr, retEndStr, oneWay, results: res.data
+            depStartStr, depEndStr, retStartStr, retEndStr,
+            depRanges, retRanges, oneWay, results: res.data
           };
           setFlightHistory(prev => {
             const next = [entry, ...prev].slice(0, 10);
@@ -358,6 +459,8 @@ export default function Dashboard() {
         if (parsed.sortOrder === 'best' || parsed.sortOrder === 'day') setSortOrder(parsed.sortOrder);
         if (parsed.trainExcluded) setTrainExcluded(parsed.trainExcluded);
         if (parsed.flightExcluded) setFlightExcluded(parsed.flightExcluded);
+        if (parsed.depRangePool) setDepRangePool(parsed.depRangePool);
+        if (parsed.retRangePool) setRetRangePool(parsed.retRangePool);
 
         if (parsed.depDateRange) {
           setDepDateRange([
@@ -450,6 +553,7 @@ export default function Dashboard() {
       trainResults, flightResults,
       trainError, flightError,
       sortOrder, trainExcluded, flightExcluded,
+      depRangePool, retRangePool,
       depDateRange: [
         depDateRange[0] ? depDateRange[0].toISOString() : null,
         depDateRange[1] ? depDateRange[1].toISOString() : null
@@ -460,7 +564,7 @@ export default function Dashboard() {
       ]
     };
     sessionStorage.setItem('dashboard_state', JSON.stringify(stateToSave));
-  }, [mounted, mode, origins, destinations, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, sortOrder, trainExcluded, flightExcluded, depDateRange, retDateRange]);
+  }, [mounted, mode, origins, destinations, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, sortOrder, trainExcluded, flightExcluded, depRangePool, retRangePool, depDateRange, retDateRange]);
 
   if (!mounted) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}><Loader2 className="animate-spin" size={32} /></div>;
@@ -652,8 +756,19 @@ export default function Dashboard() {
                   isClearable={true}
                   customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => addRangeToPool(depDateRange, setDepDateRange, setDepRangePool)}
+                  disabled={!depDateRange[0]}
+                  style={{ padding: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: depDateRange[0] ? 1 : 0.4 }}
+                  title={t("add_range")}
+                >
+                  <CalendarPlus size={18} />
+                </button>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>{t("start_end")}</div>
+              {renderRangePool(depRangePool, setDepRangePool)}
             </div>
           </div>
           
@@ -687,8 +802,19 @@ export default function Dashboard() {
                   isClearable={true}
                   customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => addRangeToPool(retDateRange, setRetDateRange, setRetRangePool)}
+                  disabled={!retDateRange[0]}
+                  style={{ padding: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: retDateRange[0] ? 1 : 0.4 }}
+                  title={t("add_range")}
+                >
+                  <CalendarPlus size={18} />
+                </button>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>{t("start_end")}</div>
+              {renderRangePool(retRangePool, setRetRangePool)}
             </div>
           </div>
         </div>
@@ -911,17 +1037,19 @@ export default function Dashboard() {
 
       {(mode === 'trains' ? trainResults : flightResults).length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{t("results_to_show")}</span>
-          <select 
-            value={itemsPerPage} 
+          <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{sortOrder === 'day' ? t("results_per_day") : t("results_to_show")}</span>
+          <select
+            value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
             style={{ width: '80px', padding: '6px 10px', background: 'var(--card-bg)' }}
           >
+            <option value={3}>3</option>
             <option value={5}>5</option>
             <option value={10}>10</option>
             <option value={15}>15</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
+            <option value={100}>100</option>
           </select>
         </div>
       )}
@@ -934,8 +1062,13 @@ export default function Dashboard() {
         onSelect={(entry) => {
           setOrigins([entry.origin]);
           setDestinations([entry.destination]);
-          setDepDateRange([entry.depStartStr ? new Date(entry.depStartStr) : null, entry.depEndStr ? new Date(entry.depEndStr) : null]);
-          setRetDateRange([entry.retStartStr ? new Date(entry.retStartStr) : null, entry.retEndStr ? new Date(entry.retEndStr) : null]);
+          // With a pool, the picker starts empty and the chips carry the dates;
+          // older entries have no pool, so they fall back to their single span.
+          const hasPool = (entry.depRanges?.length || 0) > 1 || (entry.retRanges?.length || 0) > 1;
+          setDepRangePool(hasPool ? entry.depRanges || [] : []);
+          setRetRangePool(hasPool ? entry.retRanges || [] : []);
+          setDepDateRange(hasPool ? [null, null] : [entry.depStartStr ? new Date(entry.depStartStr) : null, entry.depEndStr ? new Date(entry.depEndStr) : null]);
+          setRetDateRange(hasPool ? [null, null] : [entry.retStartStr ? new Date(entry.retStartStr) : null, entry.retEndStr ? new Date(entry.retEndStr) : null]);
           setOneWay(entry.oneWay);
           if (mode === 'trains') {
             setTrainResults(entry.results);
