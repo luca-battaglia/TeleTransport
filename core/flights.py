@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 import requests
 from tabulate import tabulate
@@ -43,9 +44,28 @@ except ImportError:
 
 SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
 
+# Google Flights encodes a precise search in an opaque protobuf blob (tfs=), which
+# nothing documents and which breaks without warning. The natural-language q= form
+# is the stable public one: it resolves IATA codes and dates reliably.
+GOOGLE_FLIGHTS_URL = "https://www.google.com/travel/flights"
+
 IATA_BARI = "BRI"
 IATA_BRINDISI = "BDS"
 IATA_ZURICH = "ZRH"
+
+
+def build_booking_url(
+    origin: str,
+    destination: str,
+    out_dep: datetime,
+    in_dep: Optional[datetime] = None,
+    *,
+    lang: str = "it",
+) -> str:
+    """Link to the Google Flights results for the day and route of a ranked row."""
+    query = f"Flights to {destination} from {origin} on {out_dep.date().isoformat()}"
+    query += f" through {in_dep.date().isoformat()}" if in_dep else " one-way"
+    return f"{GOOGLE_FLIGHTS_URL}?{urlencode({'q': query, 'hl': lang})}"
 
 
 def eprint(*a: Any, **k: Any) -> None:

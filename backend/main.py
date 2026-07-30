@@ -27,11 +27,13 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from core.trains import (
     SearchTask as TrainSearchTask,
     Route as TrainRoute,
+    build_booking_url as build_train_booking_url,
     search_ranked_solutions,
     load_config_dict as load_trains_config,
     parse_trains_config,
 )
 from core.flights import (
+    build_booking_url as build_flight_booking_url,
     build_rows_multi,
     load_config_dict as load_flights_config,
     parse_flights_config,
@@ -74,6 +76,8 @@ class SearchRequest(BaseModel):
     ret_start: Optional[date] = None
     ret_end: Optional[date] = None
     one_way: bool = False
+    # UI language, so the booking links open in the language the user is reading.
+    lang: str = "it"
 
 
 class TrainRequest(SearchRequest):
@@ -252,7 +256,10 @@ async def get_trains(
                 "duration_min": int(r.duration.total_seconds() / 60),
                 "changes": r.changes,
                 "price_eur": r.price_eur,
-                "adjusted_cost": round(r.adjusted_cost, 2)
+                "adjusted_cost": round(r.adjusted_cost, 2),
+                "booking_url": build_train_booking_url(
+                    r.origin, r.destination, r.dep, lang=req.lang
+                ),
             })
             
         return {"data": results}
@@ -360,7 +367,10 @@ async def get_flights(
                 "in_arr": r.in_arr.isoformat() if r.in_arr else None,
                 "total_duration_min": r.total_duration_min,
                 "price_eur": r.price_eur,
-                "adjusted_cost": round(r.adjusted_cost, 2)
+                "adjusted_cost": round(r.adjusted_cost, 2),
+                "booking_url": build_flight_booking_url(
+                    r.origin, r.destination, r.out_dep, r.in_dep, lang=req.lang
+                ),
             })
             
         return {"data": results}

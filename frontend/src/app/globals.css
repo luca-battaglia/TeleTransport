@@ -224,6 +224,22 @@ tr:hover .row-action,
   color: #ef4444;
 }
 
+/* A real anchor, so ctrl/middle click opens the operator's page in a new tab. */
+.route-link {
+  font-weight: 500;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--card-border);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.route-link:hover,
+.route-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 /* Typography */
 h1 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; }
 h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }

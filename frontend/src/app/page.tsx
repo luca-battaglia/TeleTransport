@@ -375,7 +375,8 @@ export default function Dashboard() {
         dep_end: depEndStr || depStartStr,
         ret_start: retStartStr || undefined,
         ret_end: (retEndStr || retStartStr) || undefined,
-        one_way: oneWay
+        one_way: oneWay,
+        lang: language
       };
 
       const res = mode === 'trains' 
@@ -1026,9 +1027,21 @@ export default function Dashboard() {
                     transition={{ duration: 0.18 }}
                   >
                     <td>
-                      <span style={{ fontWeight: 500 }}>
-                        {r.route || `${r.origin} → ${r.destination}`}
-                      </span>
+                      {r.booking_url ? (
+                        <a
+                          href={r.booking_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="route-link"
+                          title={mode === 'trains' ? t("open_row_trenitalia") : t("open_row_flights")}
+                        >
+                          {r.route || `${r.origin} → ${r.destination}`}
+                        </a>
+                      ) : (
+                        <span style={{ fontWeight: 500 }}>
+                          {r.route || `${r.origin} → ${r.destination}`}
+                        </span>
+                      )}
                       {!oneWay && r.in_dep && <div style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>{t("return_label")}: {r.destination} → {r.origin}</div>}
                     </td>
                     <td>{new Date(r.out_dep || r.dep).toLocaleString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>

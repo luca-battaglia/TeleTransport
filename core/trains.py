@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
@@ -34,6 +34,14 @@ TZ = ZoneInfo("Europe/Rome")
 BFF_BASE = "https://www.lefrecce.it/Channels.Website.BFF.WEB"
 SOLUTIONS_URL = f"{BFF_BASE}/website/ticket/solutions"
 LOC_SEARCH_URL = f"{BFF_BASE}/website/locations/search"
+
+# LeFrecce's own search page cannot be linked to: its criteria live in an internal
+# store and its route (#/search-results) accepts no parameters. The white-label
+# entry point does read them from the query string, and with searchSolutions=true
+# it runs the search and lands straight on the results. It resolves station names
+# through the same locations endpoint as LOC_SEARCH_URL, taking the first hit, so
+# the names we searched with resolve to the same stations.
+WHITE_LABEL_SEARCH_URL = "https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/"
 
 # Station presets (scope is limited to Zurigo/Torino/Alessandria)
 ZURIGO = "Zurigo HB"
@@ -388,12 +396,32 @@ class SearchTask:
 @dataclass
 class RankedSolution:
     route_label: str
+    origin: str
+    destination: str
     dep: datetime
     arr: datetime
     duration: timedelta
     changes: int
     price_eur: float
     adjusted_cost: float
+
+
+def build_booking_url(origin: str, destination: str, dep: datetime, *, lang: str = "it") -> str:
+    """Link to the LeFrecce results for the day and route of a ranked solution."""
+    params = {
+        "isRoundTrip": "false",
+        "departureStation": origin,
+        "arrivalStation": destination,
+        "departureDate": dep.strftime("%d-%m-%Y"),
+        # Anchored to the top of the hour rather than the exact minute, so the
+        # solution the user clicked is certain to be on the page it opens.
+        "departureTime": dep.strftime("%H:00"),
+        "noOfAdults": "1",
+        "noOfChildren": "0",
+        "searchSolutions": "true",
+        "lang": lang,
+    }
+    return f"{WHITE_LABEL_SEARCH_URL}?{urlencode(params)}"
 
 
 # ---------------- API helpers ----------------
@@ -941,6 +969,8 @@ async def search_ranked_solutions(
                         day_ranked.append(
                             RankedSolution(
                                 route_label=route_label,
+                                origin=t.route.from_name,
+                                destination=t.route.to_name,
                                 dep=dep_local,
                                 arr=arr_local,
                                 duration=duration,

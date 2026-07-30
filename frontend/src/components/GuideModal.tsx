@@ -83,6 +83,9 @@ export default function GuideModal({ isOpen, onClose }: GuideModalProps) {
           <li>
             <strong>{t('guide_exclude')}:</strong> {t('guide_exclude_desc')}
           </li>
+          <li>
+            <strong>{t('guide_row_link')}:</strong> {t('guide_row_link_desc')}
+          </li>
         </ul>
 
         <h3 style={{ color: 'var(--accent)', marginBottom: '12px' }}>{t('guide_serpapi_title')}</h3>

@@ -48,6 +48,8 @@ const en: Translations = {
   guide_results_count_desc: "The selector under the table (3 to 100) means a different thing in each view: ranked by best it is the total number of rows, grouped by day it is the number of rows per day. So 5 while grouping by day shows the 5 best solutions of every day.",
   guide_exclude: "Hiding solutions",
   guide_exclude_desc: "The × at the end of a row drops that solution from the table and the next best one moves up into its place. Nothing is lost: the curved arrow brings back the last one you hid and the circular arrow, with the counter beside it, restores them all. A new search clears the hidden ones.",
+  guide_row_link: "Opening a solution",
+  guide_row_link_desc: "The route of every row is a link to the operator's own results for that route on that day, with the search already filled in: Trenitalia for trains, Google Flights for flights. Ctrl+click (⌘+click on a Mac) or a middle click opens it in a background tab, so you can line up several days without losing the table. The train link asks for one adult and is anchored to the hour the solution departs, so adjust passengers and fares once you are there. Prices on the operator's site are live and may have moved since your search.",
   close: "Close",
 
   // Main Page
@@ -87,6 +89,8 @@ const en: Translations = {
   exclude_row: "Hide this solution",
   restore_last: "Bring back the last hidden solution",
   restore_all: "Bring back every hidden solution",
+  open_row_trenitalia: "Open this day on Trenitalia, search already filled in",
+  open_row_flights: "Open this day on Google Flights, search already filled in",
   err_outbound: "You must enter an outbound date (start).",
   err_return: "You must enter a return date or check 'One-way'.",
   err_max_range: "A search may cover at most {days} days in total, counting every range you added. Please narrow the selection to prevent system overload.",
@@ -188,6 +192,8 @@ const it: Translations = {
   guide_results_count_desc: "Il selettore sotto la tabella (da 3 a 100) significa una cosa diversa nelle due viste: ordinando per migliore è il numero totale di righe, raggruppando per giorno è il numero di righe per ogni giorno. Quindi 5 con il raggruppamento per giorno mostra le 5 soluzioni migliori di ciascun giorno.",
   guide_exclude: "Escludere soluzioni",
   guide_exclude_desc: "La × in fondo a una riga la toglie dalla tabella e al suo posto sale la successiva migliore. Niente va perso: la freccia curva rimette l'ultima che hai nascosto e la freccia circolare, con il contatore accanto, le ripristina tutte. Una nuova ricerca azzera le esclusioni.",
+  guide_row_link: "Aprire una soluzione",
+  guide_row_link_desc: "La rotta di ogni riga è un link ai risultati dell'operatore per quella tratta in quel giorno, con la ricerca già compilata: Trenitalia per i treni, Google Flights per i voli. Ctrl+click (⌘+click su Mac) o il click centrale lo aprono in una scheda in secondo piano, così puoi mettere in fila più giorni senza perdere la tabella. Il link dei treni chiede un adulto ed è ancorato all'ora di partenza della soluzione, quindi passeggeri e tariffe si sistemano una volta arrivato lì. I prezzi sul sito dell'operatore sono in tempo reale e possono essersi mossi dalla tua ricerca.",
   close: "Chiudi",
 
   // Main Page
@@ -227,6 +233,8 @@ const it: Translations = {
   exclude_row: "Nascondi questa soluzione",
   restore_last: "Ripristina l'ultima soluzione nascosta",
   restore_all: "Ripristina tutte le soluzioni nascoste",
+  open_row_trenitalia: "Apri questo giorno su Trenitalia, ricerca già compilata",
+  open_row_flights: "Apri questo giorno su Google Flights, ricerca già compilata",
   err_outbound: "Devi inserire una data di andata (inizio).",
   err_return: "Devi inserire una data di ritorno o spuntare 'Solo Andata'.",
   err_max_range: "Una ricerca può coprire al massimo {days} giorni in totale, sommando tutti gli intervalli aggiunti. Restringi la selezione per non sovraccaricare il sistema.",

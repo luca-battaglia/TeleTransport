@@ -19,6 +19,7 @@ Most search engines sort by ticket price. TeleTransport sorts by what a trip act
 - **Reminders** — custom notes that surface at search time (e.g. "use the Booking.com credit").
 - **Bilingual** — full English and Italian UI, including an in-app guide to the scoring model.
 - **Markdown export** — copy the result table straight into notes or chat.
+- **Deep links to the operator** — the route of every result links to Trenitalia or Google Flights with the search already filled in for that route on that day. See [Booking deep links](#booking-deep-links).
 - **Keyboard shortcuts** — `Alt+1` trains, `Alt+2` flights, `Ctrl+Enter` search, `Esc` close.
 - **CLI** — the original terminal tools are still present and fully functional.
 
@@ -167,9 +168,39 @@ The backend exposes three endpoints.
 | `POST` | `/api/trains` | Rank train solutions |
 | `POST` | `/api/flights` | Rank flight solutions |
 
-Search requests take `origins`, `destinations`, `dep_start`, `dep_end`, optional `ret_start` / `ret_end`, and `one_way`.
+Search requests take `origins`, `destinations`, `dep_start`, `dep_end`, optional `ret_start` / `ret_end`, `one_way`, and `lang` (`it` by default, used only for the booking links).
 
 Two optional headers customise a request: `x-config` carries a JSON scoring override for that call, and `x-serpapi-key` supplies the SerpApi key for flight searches.
+
+Every result row carries a `booking_url` alongside its prices — see below.
+
+---
+
+## Booking deep links
+
+Each row's route is an anchor to the operator's own results for that route on that departure day. The URLs are built server-side (`build_booking_url` in `core/trains.py` and `core/flights.py`) rather than in the browser, because the backend has already resolved stations and IATA codes, and it redeploys on its own — a change in either provider's URL format is a one-file backend fix with no frontend release.
+
+**Flights** use the natural-language `q=` form of Google Flights, the same one behind the *Open Google Flights* button on the form. The precise `tfs=` parameter is an undocumented protobuf blob and is not worth depending on.
+
+**Trains** are the interesting case. LeFrecce's own search page cannot be linked to: its criteria live in an internal store and its route (`#/search-results`) takes no parameters. Its **white-label entry point** does read them from the query string:
+
+```text
+https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/
+    ?departureStation=Zurigo HB
+    &arrivalStation=Alessandria
+    &departureDate=15-09-2026      # DD-MM-YYYY, strict; past dates snap to today
+    &departureTime=07:00           # HH:mm or HH
+    &isRoundTrip=false
+    &noOfAdults=1&noOfChildren=0   # integers below 8
+    &searchSolutions=true          # runs the search and lands on the results
+    &lang=it
+```
+
+Station names are resolved through the same locations endpoint this project uses, taking the first hit, so the names you search with resolve to the same stations. The link is anchored to the top of the departure hour so the row's own solution is certain to be on the page, and it always asks for one adult — refine passengers and fares on Trenitalia.
+
+`lang` is honoured only in part: with `lang=en` the site chrome switches to English but the solution list itself stays Italian. That is LeFrecce's behaviour, not something this project can set.
+
+This is an undocumented entry point. It is one HTTP call away from being verified if it ever breaks: open a link, confirm you land on `#/search-results`. Nothing else in the app depends on it.
 
 ---
 
