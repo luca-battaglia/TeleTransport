@@ -218,7 +218,7 @@ That is why a booking link opens signed in when an operator tab is already aroun
 
 `userscripts/lefrecce-session-restore.user.js` does exactly that. Install [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey), open the file, and let the extension pick it up. It mirrors the store into `localStorage` and seeds it back into tabs that start without one, dropping the backup on logout, on an expired token, and after 30 minutes — the same idle window the site itself enforces before wiping its own data.
 
-It has not been tested against a real logged-in account. It touches the auth state of a site where you spend money, so check that the reserved area and the purchase flow behave normally before relying on it.
+Restoring the login is confirmed working against a real account: a booking link opens signed in with no Trenitalia tab already open. The purchase flow has not been exercised end to end, and the restored store carries the cart along with everything else, so check that a booking behaves normally before relying on it for one.
 
 ---
 

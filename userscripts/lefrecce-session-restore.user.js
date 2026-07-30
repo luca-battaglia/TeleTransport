@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LeFrecce session restore
 // @namespace    teletransport
-// @version      1.0.0
+// @version      1.1.0
 // @description  Keep a LeFrecce login usable in a freshly opened tab, so TeleTransport booking links do not land logged out.
 // @match        https://www.lefrecce.it/*
 // @run-at       document-start
@@ -79,14 +79,27 @@
     sessionStorage.setItem(STORE_KEY, backup.state);
   };
 
+  // Once solutions are loaded the store runs to several hundred KB, and localStorage
+  // writes block the main thread, so an unchanged state is never rewritten.
+  let lastSaved = null;
+
   const save = () => {
     if (!credentialIsUsable()) {
       dropBackup();
+      lastSaved = null;
       return;
     }
     const state = sessionStorage.getItem(STORE_KEY);
-    if (!state) return;
-    localStorage.setItem(BACKUP_KEY, JSON.stringify({ savedAt: Date.now(), state }));
+    if (!state || state === lastSaved) return;
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ savedAt: Date.now(), state }));
+      lastSaved = state;
+    } catch {
+      // Out of quota: a partial or stale backup is worse than none, and retrying
+      // every tick would just throw again.
+      dropBackup();
+      lastSaved = null;
+    }
   };
 
   restore();
