@@ -22,6 +22,18 @@ const MAX_RANGE_DAYS = 14;
 
 type SortOrder = 'best' | 'day';
 
+// How many results to show is remembered per mode and per view, because the
+// number means different things: a whole-table total when ranked by best, a
+// per-day count when grouped by day.
+type ResultCountKey = `${'trains' | 'flights'}-${SortOrder}`;
+
+const DEFAULT_RESULT_COUNTS: Record<ResultCountKey, number> = {
+  'trains-best': 10,
+  'trains-day': 3,
+  'flights-best': 10,
+  'flights-day': 3,
+};
+
 // One stretch of days in a search pool, as yyyy-mm-dd so it survives a JSON
 // round-trip through sessionStorage unchanged.
 type DateRange = { start: string; end: string };
@@ -118,7 +130,7 @@ export default function Dashboard() {
   const [retDateRange, setRetDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [depRangePool, setDepRangePool] = useState<DateRange[]>([]);
   const [retRangePool, setRetRangePool] = useState<DateRange[]>([]);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [resultCounts, setResultCounts] = useState<Record<ResultCountKey, number>>(DEFAULT_RESULT_COUNTS);
   const [oneWay, setOneWay] = useState(true);
   const [savedSearches, setSavedSearches] = useState<{trains: {origins: string[], destinations: string[]}[], flights: {origins: string[], destinations: string[]}[]}>({ trains: [], flights: [] });
   
@@ -146,6 +158,9 @@ export default function Dashboard() {
   const results = mode === 'trains' ? trainResults : flightResults;
   const excluded = mode === 'trains' ? trainExcluded : flightExcluded;
   const setExcluded = mode === 'trains' ? setTrainExcluded : setFlightExcluded;
+
+  const resultCountKey: ResultCountKey = `${mode}-${sortOrder}`;
+  const itemsPerPage = resultCounts[resultCountKey];
 
   const visibleRows = useMemo(() => {
     const hidden = new Set(excluded);
@@ -448,7 +463,13 @@ export default function Dashboard() {
         if (parsed.mode) setMode(parsed.mode);
         if (parsed.origins) setOrigins(parsed.origins);
         if (parsed.destinations) setDestinations(parsed.destinations);
-        if (parsed.itemsPerPage) setItemsPerPage(parsed.itemsPerPage);
+        // Merged over the defaults so a key added later still has a value.
+        if (parsed.resultCounts) {
+          const restored = Object.fromEntries(
+            Object.entries(parsed.resultCounts).filter(([, v]) => typeof v === 'number' && v > 0)
+          );
+          setResultCounts(prev => ({ ...prev, ...restored }));
+        }
         if (parsed.oneWay !== undefined) setOneWay(parsed.oneWay);
         if (parsed.trainSearched !== undefined) setTrainSearched(parsed.trainSearched);
         if (parsed.flightSearched !== undefined) setFlightSearched(parsed.flightSearched);
@@ -548,7 +569,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!mounted) return;
     const stateToSave = {
-      mode, origins, destinations, itemsPerPage, oneWay,
+      mode, origins, destinations, resultCounts, oneWay,
       trainSearched, flightSearched,
       trainResults, flightResults,
       trainError, flightError,
@@ -564,7 +585,7 @@ export default function Dashboard() {
       ]
     };
     sessionStorage.setItem('dashboard_state', JSON.stringify(stateToSave));
-  }, [mounted, mode, origins, destinations, itemsPerPage, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, sortOrder, trainExcluded, flightExcluded, depRangePool, retRangePool, depDateRange, retDateRange]);
+  }, [mounted, mode, origins, destinations, resultCounts, oneWay, trainSearched, flightSearched, trainResults, flightResults, trainError, flightError, sortOrder, trainExcluded, flightExcluded, depRangePool, retRangePool, depDateRange, retDateRange]);
 
   if (!mounted) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}><Loader2 className="animate-spin" size={32} /></div>;
@@ -1040,7 +1061,7 @@ export default function Dashboard() {
           <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{sortOrder === 'day' ? t("results_per_day") : t("results_to_show")}</span>
           <select
             value={itemsPerPage}
-            onChange={e => setItemsPerPage(Number(e.target.value))}
+            onChange={e => setResultCounts(prev => ({ ...prev, [resultCountKey]: Number(e.target.value) }))}
             style={{ width: '80px', padding: '6px 10px', background: 'var(--card-bg)' }}
           >
             <option value={3}>3</option>
