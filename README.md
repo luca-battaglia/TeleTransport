@@ -1,253 +1,147 @@
-# TeleTransport 🚄✈️
+# TeleTransport
 
-*Time is money.*
+Train and flight search that ranks trips by what they cost you, not by the ticket price.
 
-TeleTransport searches, ranks and compares travel options across **trains** (Trenitalia / LeFrecce) and **flights** (Google Flights via SerpApi).
+[![CI](https://github.com/luca-battaglia/TeleTransport/actions/workflows/ci.yml/badge.svg)](https://github.com/luca-battaglia/TeleTransport/actions/workflows/ci.yml)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-Most search engines sort by ticket price. TeleTransport sorts by what a trip actually costs you: it converts travel time, awkward departure hours, late arrivals, connections and airport transfers into euros, and ranks everything by a single **adjusted cost**. A €30 flight leaving at 05:40 that needs a two-hour drive to the airport is rarely cheaper than a €55 train leaving after breakfast — this tool makes that comparison explicit.
+**Live:** [teletransport.vercel.app](https://teletransport.vercel.app)
 
----
+![TeleTransport ranking trains between Milan and Rome](docs/demo.gif)
 
-## Features
+A €30 flight at 05:40 with a two-hour drive to the airport is rarely cheaper than a €55 train after breakfast. TeleTransport puts a number on that. It searches Trenitalia and Google Flights over a range of dates, turns travel time, early starts, late arrivals, changes and airport transfers into euros, and sorts every option by the resulting **adjusted cost**.
 
-- **Web app** — Next.js frontend with light/dark themes, animated transitions and a glassmorphism UI.
-- **Multi-origin / multi-destination** — compare up to 5 origins against 5 destinations in one search; every pair is searched concurrently.
-- **Date ranges** — search a span of up to 14 days per direction instead of a single date, with a scrollable 12-month calendar.
-- **Fully configurable scoring** — every weight and penalty is exposed, both in `travel_ranker.toml` and in the in-app settings panel.
-- **Per-airport extra costs** — attach fuel cost and driving time (yours and your companions') to specific IATA codes, folded into the adjusted cost.
-- **State persistence** — results, settings, active tab and inputs survive a page reload via `localStorage` / `sessionStorage`.
-- **Reminders** — custom notes that surface at search time (e.g. "use the Booking.com credit").
-- **Bilingual** — full English and Italian UI, including an in-app guide to the scoring model.
-- **Markdown export** — copy the result table straight into notes or chat.
-- **Deep links to the operator** — the route of every result links to Trenitalia or Google Flights with the search already filled in for that route on that day. See [Booking deep links](#booking-deep-links).
-- **Keyboard shortcuts** — `Alt+1` trains, `Alt+2` flights, `Ctrl+Enter` search, `Esc` close.
-- **CLI** — the original terminal tools are still present and fully functional.
-
----
+- Trains from Trenitalia, flights from Google Flights (through [SerpApi](https://serpapi.com))
+- Up to 5 origins × 5 destinations and up to 14 days per direction in one search, non-consecutive days included
+- Every weight is configurable, in the web app or in [`travel_ranker.toml`](travel_ranker.toml)
+- Each result links to the operator's own search for that route and day, ready to book
+- A web app in English and Italian, and a CLI with the same options, both on one engine
 
 ## How the ranking works
 
-Solutions are sorted by ascending `adjusted_cost`, then by duration, then by departure time.
-
-**Trains**
-
-```text
-adjusted_cost = base_price
-              + (duration_hours * time_value_eur_per_hour)
-              + early_departure_penalty
-              + late_arrival_penalty
-              + (changes * change_penalty_eur)
-```
-
-**Flights**
-
 ```text
 adjusted_cost = price
-              + (duration_hours * time_value_eur_per_hour)
-              + early_departure_penalty
-              + late_arrival_penalty
-              + (connections * connection_penalty_eur)
-              + airport_extras (fuel + your drive time + companions' drive time)
+              + duration_hours × time_value_eur_per_hour
+              + hours before early_departure_ref_hour × early_departure_penalty_eur_per_hour
+              + hours after late_arrival_start_hour × late_arrival_penalty_eur_per_hour
+              + changes × change_penalty_eur
+              + airport transfers (flights only: fuel, plus driving hours at your and your companions' time value)
 ```
 
-For round trips the flight scoring uses the return leg's price, matching the original CLI behaviour. Airport extras are applied once for one-way trips and twice for round trips.
-
-Every term above maps to a key in `travel_ranker.toml` and to a field in the app's settings panel.
-
----
+Ties are broken by duration. A round-trip flight is priced as a whole, with the penalties of both legs; train searches with a return list outbound and return trains in one table.
 
 ## Architecture
 
-```
-TeleTransport/
-├── core/                 Shared engine — scoring, parsing, upstream API clients
-│   ├── trains.py         LeFrecce BFF client (Playwright-assisted) + train ranking
-│   ├── flights.py        SerpApi Google Flights client + flight ranking
-│   └── cache.py          diskcache store, backed by backend/backend_cache/
-├── backend/              FastAPI service wrapping core/ over HTTP
-│   ├── main.py
-│   └── requirements.txt  Server dependencies
-├── cli/                  Terminal entry points (Italian prompts)
-│   ├── trains_cli.py
-│   └── flights_cli.py
-├── frontend/             Next.js 16 web app (React 19)
-├── travel_ranker.toml    Unified configuration for both engines
-├── requirements.txt      CLI dependencies
-├── trains.bat            CLI shortcut → cli/trains_cli.py
-└── flights.bat           CLI shortcut → cli/flights_cli.py
+```text
+ Browser ──► Next.js (Vercel) ──/api rewrite──► Cloudflare Tunnel ──► FastAPI (ARM VM)
+                                                                          │
+ CLI ─────────────────────────────────────────────────────────────► core/search.py
+                                                                          │
+                                         ┌────────────────────────────────┴──────┐
+                                   core/trains.py                          core/flights.py
+                             LeFrecce JSON endpoints                  SerpApi Google Flights
+                             (headless browser context)
 ```
 
-`core/` holds all the logic. The backend and the CLI are two thin front ends over the same code, so the web app and the terminal always rank identically.
+| Path | Contents |
+|---|---|
+| [`core/`](core) | The engine: upstream clients, scoring, ranking, disk cache |
+| [`backend/`](backend) | FastAPI service: request validation, rate limits, the flight demo quota |
+| [`cli/`](cli) | Command-line front end |
+| [`frontend/`](frontend) | Next.js 16 / React 19 web app |
+| [`tests/`](tests) | pytest suite, upstream services mocked |
 
----
+Some decisions worth knowing about:
 
-## Requirements
+- **One engine, two front ends.** The API and the CLI build the same `SearchQuery` and call the same functions in `core/search.py`, so they cannot rank differently.
+- **Trenitalia has no public API.** The client calls the two JSON endpoints the Trenitalia website itself uses (station lookup and solution search) from a headless browser context that holds the site's cookies. The browser only starts on a cache miss.
+- **Caching.** Upstream responses are cached in SQLite through `diskcache`: flight searches for 2 hours, Trenitalia result pages for 30 minutes, station lookups for a day. Repeating a search costs nothing upstream.
+- **No public HTTP port on the server.** The API is reachable only through a Cloudflare Tunnel, and the browser only ever talks to the Vercel origin, which proxies `/api`.
 
-| | Version | Notes |
-|---|---|---|
-| Python | 3.11+ recommended | 3.9+ works — `tomli` is installed automatically as the `tomllib` fallback |
-| Node.js | 20.9+ | required by Next.js 16 |
-| SerpApi key | — | flights only; train search needs no key |
+## Running it locally
 
----
+Requirements: Python 3.11+, Node.js 20.9+, and a free [SerpApi key](https://serpapi.com/users/sign_up) for flight searches (trains need no key).
 
-## Setup
-
-### 1. Python environment
-
-Create the virtual environment **in the repository root** — the `.bat` shortcuts expect it at `.venv/`:
-
-```powershell
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt           # CLI dependencies
-pip install -r backend/requirements.txt   # web backend dependencies
-playwright install
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+cp .env.example .env               # add SERPAPI_KEY for the CLI
+
+uvicorn backend.main:app --port 8000
 ```
 
-There are two dependency files on purpose: `requirements.txt` covers the CLI, `backend/requirements.txt` covers the HTTP service. Install both to run everything locally; a server only needs the second one.
+In a second terminal:
 
-### 2. SerpApi key
-
-Copy `.env.example` to `.env` and fill it in:
-
-```ini
-SERPAPI_KEY=your_serpapi_api_key
-```
-
-The web app can take the key from its settings panel instead — see [Security notes](#security-notes).
-
-### 3. Backend
-
-```powershell
-uvicorn backend.main:app --reload --port 8000
-```
-
-### 4. Frontend
-
-```powershell
+```bash
 cd frontend
 npm install
-npm run dev
+npm run dev                        # http://localhost:3000
 ```
 
-The app runs at `http://localhost:3000`. The frontend proxies `/api/*` to the backend through a Next.js rewrite, so there are no CORS issues in development. Point it elsewhere with `NEXT_PUBLIC_BACKEND_URL` (default `http://127.0.0.1:8000`).
+The web app proxies `/api/*` to `NEXT_PUBLIC_BACKEND_URL` (default `http://127.0.0.1:8000`). In the web app the SerpApi key goes in Settings.
 
-### 5. CLI (optional)
+## CLI
 
-```powershell
-.\trains.bat
-.\flights.bat
+```bash
+python -m cli trains --from "Milano Centrale" --to "Roma Termini" --dep 3-5/10 --ret 10/10
+python -m cli flights --from Zurich --to Rome --to Naples --dep 2026-10-03 --sort day --links
 ```
 
-Run with no arguments for an interactive wizard, or pass flags to override the TOML. The CLI prompts are in Italian.
+```text
+| Route                           | Departure        | Arrival          | Duration   |   Changes |   Price (EUR) |   Adj. cost (EUR) |
+|---------------------------------|------------------|------------------|------------|-----------|---------------|-------------------|
+| Milano Centrale -> Roma Termini | 2026-10-02 19:35 | 2026-10-02 22:39 | 3h04       |         0 |         50.90 |            121.98 |
+| Milano Centrale -> Roma Termini | 2026-10-02 17:35 | 2026-10-02 20:45 | 3h10       |         0 |         62.90 |            126.23 |
+```
 
----
+Dates take the forms `2026-10-03`, `3/10`, `3-5/10` or `30/9..2/10`; repeat `--dep` or `--ret` for non-consecutive days. `--sort day` groups by departure day, `--limit` sets the rows shown (in total, or per day), `--links` adds booking links and `--json` prints machine-readable rows. Train stations take their Italian names, which is what Trenitalia's station lookup matches. Run `python -m cli trains --help` for everything else.
 
 ## Configuration
 
-`travel_ranker.toml` configures both engines. Precedence is **CLI arguments > TOML > built-in defaults**, so the file is optional — delete it and everything still runs on defaults.
-
-It is discovered automatically, in order:
-
-1. `./travel_ranker.toml`
-2. `~/.config/travel_ranker.toml`
-3. the path in the `TRAVEL_RANKER_CONFIG` environment variable
-
-Main sections: `[trains]` and `[trains.scoring]`, `[flights]` and `[flights.scoring]`, `[flights.airport_extras.<IATA>]`, `[reminders]`, and `[ui]` for the web app's default origins, destinations and dropdown entries.
-
----
+Scoring weights, search limits and the web app's defaults live in [`travel_ranker.toml`](travel_ranker.toml), found through `TRAVEL_RANKER_CONFIG`, then `./travel_ranker.toml`, then `~/.config/travel_ranker.toml`. Every key is optional. Server settings (demo quota, rate limits) are environment variables, documented in [`.env.example`](.env.example).
 
 ## API
 
-The backend exposes three endpoints.
-
-| Method | Path | Purpose |
+| Method | Path | |
 |---|---|---|
-| `GET` | `/api/config` | UI defaults — origins, destinations, dropdown options, IATA mapping |
-| `POST` | `/api/trains` | Rank train solutions |
-| `POST` | `/api/flights` | Rank flight solutions |
+| `POST` | `/api/trains` | Ranked train solutions |
+| `POST` | `/api/flights` | Ranked flights |
+| `GET` | `/api/config` | Default routes and the IATA lookup for the web app |
+| `GET` | `/api/flights/demo` | Whether the shared demo quota is on, and what is left of it today |
+| `GET` | `/api/health` | Liveness |
 
-Search requests take `origins`, `destinations`, `dep_start`, `dep_end`, optional `ret_start` / `ret_end`, `one_way`, and `lang` (`it` by default, used only for the booking links).
+Search bodies carry `origins`, `destinations`, `dep_ranges`, `ret_ranges` (`[{"start": "2026-10-03", "end": "2026-10-05"}]`), `one_way` and `lang`. Two optional headers: `X-SerpApi-Key`, and `X-Config` with scoring overrides. Errors come back as `{"detail": {"code": ..., "message": ...}}`, and the web app translates them by `code`.
 
-Two optional headers customise a request: `x-config` carries a JSON scoring override for that call, and `x-serpapi-key` supplies the SerpApi key for flight searches.
+## Security and privacy
 
-Every result row carries a `booking_url` alongside its prices — see below.
+- A SerpApi key entered in the web app stays in that browser and is sent only with flight searches. The server neither stores nor logs it.
+- `X-Config` is validated against a whitelist: clients can change scoring weights and their own lookups, never limits, retries or caching.
+- Every client gets an hourly search budget, and concurrent train searches are capped. Client IP addresses are kept only as salted hashes, in counters that expire within two days.
+- Visitors without a key can try flights on a shared demo quota: small searches only (one route, up to three days), a few per visitor per day, under a global daily cap sized below the SerpApi free plan. Failed and cached searches are refunded.
+- Deploys run the test suite first, then sync over SSH to a pinned host key.
 
----
+## Tests
 
-## Booking deep links
-
-Each row's route is an anchor to the operator's own results for that route on that departure day. The URLs are built server-side (`build_booking_url` in `core/trains.py` and `core/flights.py`) rather than in the browser, because the backend has already resolved stations and IATA codes, and it redeploys on its own — a change in either provider's URL format is a one-file backend fix with no frontend release.
-
-**Flights** use the natural-language `q=` form of Google Flights, the same one behind the *Open Google Flights* button on the form. The precise `tfs=` parameter is an undocumented protobuf blob and is not worth depending on.
-
-**Trains** are the interesting case. LeFrecce's own search page cannot be linked to: its criteria live in an internal store and its route (`#/search-results`) takes no parameters. Its **white-label entry point** does read them from the query string:
-
-```text
-https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/
-    ?departureStation=Zurigo HB
-    &arrivalStation=Alessandria
-    &departureDate=15-09-2026      # DD-MM-YYYY, strict; past dates snap to today
-    &departureTime=07:00           # HH:mm or HH
-    &isRoundTrip=false
-    &noOfAdults=1&noOfChildren=0   # integers below 8
-    &searchSolutions=true          # runs the search and lands on the results
-    &lang=it
+```bash
+pip install -r requirements-dev.txt
+pytest
+ruff check .
+cd frontend && npm run lint && npm run build
 ```
 
-Station names are resolved through the same locations endpoint this project uses, taking the first hit, so the names you search with resolve to the same stations. The link is anchored to the top of the departure hour so the row's own solution is certain to be on the page, and it always asks for one adult — refine passengers and fares on Trenitalia.
+CI runs all of the above on every push to `main` and on pull requests.
 
-`lang` is honoured only in part: with `lang=en` the site chrome switches to English but the solution list itself stays Italian. That is LeFrecce's behaviour, not something this project can set.
+## Notes
 
-This is an undocumented entry point. It is one HTTP call away from being verified if it ever breaks: open a link, confirm you land on `#/search-results`. Nothing else in the app depends on it.
+- The Trenitalia endpoints and the booking-link entry point are undocumented and can change without notice.
+- Trenitalia keeps its login state per browser tab, so a booking link opens logged out unless a Trenitalia tab is already open. [`userscripts/lefrecce-session-restore.user.js`](userscripts/lefrecce-session-restore.user.js) is an optional Tampermonkey script that fixes this on your own browser.
 
-### Why the links carry no `rel`
+## Disclaimer
 
-Each link opens into a **named** target (`trenitalia`, `googleflights`) rather than `_blank`, so a session of clicking works through one operator tab instead of leaving a tab per solution behind. That tab keeps its `sessionStorage` across navigations, including the state LeFrecce parks under its own `session` key.
-
-The named target and `rel="noopener"` are mutually exclusive: per the HTML spec `noopener` picks a fresh browsing context and does not apply the name, and `noreferrer` implies `noopener`. Measured — with `rel="noopener noreferrer"` two clicks produce two tabs, without it they reuse one. So the links carry no `rel`, and the cost is that the destination gets a `window.opener` handle on the app's tab. The only two destinations are Trenitalia and Google.
-
-Ctrl+click, ⌘+click and middle click are unaffected: the browser overrides the target and opens a separate background tab.
-
-### Staying logged in on Trenitalia (optional)
-
-LeFrecce splits its login across two storages. The credential (`b2c.jwttoken`, `aurelia_authentication`) lives in `localStorage` and is shared by every tab. The signed-in state the UI reads — the Aurelia store, user profile included — is persisted to `sessionStorage` under `session`, which is per tab and starts empty in a tab opened from another site. The app never rebuilds the store from the credential, so a fresh tab shows you logged out while holding a valid token.
-
-That is why a booking link opens signed in when an operator tab is already around, and signed out when it is not. Nothing in this project can change it: seeding `sessionStorage` on `lefrecce.it` requires code running on that origin.
-
-`userscripts/lefrecce-session-restore.user.js` does exactly that. Install [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey), open the file, and let the extension pick it up. It mirrors the store into `localStorage` and seeds it back into tabs that start without one, dropping the backup on logout, on an expired token, and after 30 minutes — the same idle window the site itself enforces before wiping its own data.
-
-Restoring the login is confirmed working against a real account: a booking link opens signed in with no Trenitalia tab already open. The purchase flow has not been exercised end to end, and the restored store carries the cart along with everything else, so check that a booking behaves normally before relying on it for one.
-
----
-
-## Security notes
-
-- The SerpApi key is **never stored on the server**. The browser keeps it in `localStorage` and sends it per request in the `x-serpapi-key` header, so a shared deployment never holds anyone else's key.
-- `.env` and any local config overrides stay out of git — check what you commit before publishing a fork.
-- Responses are cached on disk under `backend/backend_cache/`, which is git-ignored.
-
----
-
-## Deployment
-
-The repository ships a GitHub Actions workflow (`.github/workflows/deploy.yml`) that deploys the backend on push to `main`, but only when `backend/`, `core/`, `travel_ranker.toml` or the workflow itself changed — frontend-only commits skip it.
-
-It rsyncs `backend/` and `core/` to the server, installs `backend/requirements.txt` and restarts a systemd unit. It expects three repository secrets: `VPS_HOST`, `VPS_USERNAME` and `VPS_SSH_KEY`.
-
-The frontend deploys to Vercel; set `NEXT_PUBLIC_BACKEND_URL` there to the backend's public URL.
-
----
-
-## Roadmap
-
-- [ ] Italo Treno support (notably Milan–Turin)
-- [ ] Replace the disk cache with Redis for multi-instance deployments
-- [ ] A dedicated domain in place of the default platform subdomains
-
----
+TeleTransport is an independent project, not affiliated with Trenitalia, Google or SerpApi. It reads publicly available timetables and fares at low volume, with caching, to plan trips; it does not book, sell or republish anything. Prices and times on the operators' sites are the ones that count.
 
 ## License
 
-No license has been chosen yet, so all rights are reserved by default. Add a `LICENSE` file before inviting outside contributions.
+[AGPL-3.0-or-later](LICENSE). You can use, modify and host it, provided that the source of a modified version you run as a service is available to its users.
