@@ -1,49 +1,71 @@
-name: Deploy Backend to VPS
+name: Deploy backend
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
-      - 'backend/**'
-      - 'core/**'
-      - 'travel_ranker.toml'
-      - '.github/workflows/deploy.yml'
+      - "backend/**"
+      - "core/**"
+      - "requirements.txt"
+      - "travel_ranker.toml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    # Deploy to VPS using SSH
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
 
-    - name: Deploy to VPS
-      env:
-        VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-        VPS_HOST: ${{ secrets.VPS_HOST }}
-        VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
-      run: |
-        # Setup SSH key securely
-        mkdir -p ~/.ssh
-        echo "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-        
-        # Define SSH options to bypass known_hosts issues
-        SSH_OPTS="-i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        
-        # Sync the backend and core folders
-        rsync -avz --delete --exclude '__pycache__' -e "ssh $SSH_OPTS" ./backend/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/backend/
-        rsync -avz --delete --exclude '__pycache__' -e "ssh $SSH_OPTS" ./core/ $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/core/
-        rsync -avz -e "ssh $SSH_OPTS" travel_ranker.toml $VPS_USERNAME@$VPS_HOST:~/teletransport_backend/
-        
-        # Restart the systemd service
-        ssh $SSH_OPTS $VPS_USERNAME@$VPS_HOST << 'EOF'
-          cd ~/teletransport_backend
-          source venv/bin/activate
-          # Install dependencies in case requirements.txt changed
-          pip install -r backend/requirements.txt
-          sudo systemctl restart teletransport
-        EOF
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # The server's host key is pinned, so the deploy refuses to talk to
+          # anything else answering on that address.
+          printf '%s %s\n' "$VPS_HOST" "$VPS_HOST_KEY" > ~/.ssh/known_hosts
+
+      - name: Sync code
+        run: |
+          target="$VPS_USERNAME@$VPS_HOST:teletransport_backend"
+          rsync -az --delete --exclude '__pycache__' backend/ "$target/backend/"
+          rsync -az --delete --exclude '__pycache__' core/ "$target/core/"
+          rsync -az requirements.txt travel_ranker.toml "$target/"
+
+      - name: Install dependencies and restart
+        run: |
+          ssh "$VPS_USERNAME@$VPS_HOST" '
+            set -eu
+            cd ~/teletransport_backend
+            venv/bin/pip install --quiet -r requirements.txt
+            sudo systemctl restart teletransport
+            sleep 5
+            systemctl is-active --quiet teletransport
+          '
