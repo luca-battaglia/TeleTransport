@@ -317,7 +317,7 @@ p { color: var(--muted); line-height: 1.6; }
 
 /* The picker sits in a flex row next to the add-range button, so its wrapper has
    to grow instead of sizing to the input's content. */
-.react-datepicker__wrapper {
+.react-datepicker-wrapper {
   flex: 1;
   min-width: 0;
 }
