@@ -31,6 +31,20 @@ DEFAULT_IATA_MAPPING: Dict[str, str] = {
     "catania": "CTA", "palermo": "PMO",
     "venezia": "VCE", "venice": "VCE",
     "bologna": "BLQ",
+    "geneva": "GVA", "ginevra": "GVA",
+    "basel": "BSL", "basilea": "BSL",
+    "london": "LON", "londra": "LON",
+    "paris": "PAR", "parigi": "PAR",
+    "amsterdam": "AMS",
+    "berlin": "BER",
+    "munich": "MUC", "monaco di baviera": "MUC",
+    "frankfurt": "FRA", "francoforte": "FRA",
+    "vienna": "VIE",
+    "barcelona": "BCN", "barcellona": "BCN",
+    "madrid": "MAD",
+    "lisbon": "LIS",
+    "athens": "ATH", "atene": "ATH",
+    "new york": "NYC",
 }
 
 

@@ -54,10 +54,10 @@ const en: Translations = {
   flights_btn: "Flights",
   origin: "Origin",
   origin_placeholder_train: "e.g. Milano Centrale (Italian name)",
-  origin_placeholder_flight: "e.g. Zurich",
+  origin_placeholder_flight: "e.g. Zurich, or an airport code like LHR",
   destination: "Destination",
   dest_placeholder_train: "e.g. Roma Termini (Italian name)",
-  dest_placeholder_flight: "e.g. Rome",
+  dest_placeholder_flight: "e.g. London, or an airport code like CDG",
   swap_btn: "Swap",
   outbound_range: "Outbound Range",
   outbound_placeholder: "Select outbound dates",
@@ -169,7 +169,7 @@ const en: Translations = {
   settings_id_placeholder: "ID (e.g., voucher)",
   reminder_text_placeholder: "Reminder text",
   options_trains: TRAIN_STATION_OPTIONS,
-  options_flights: "Zurich,Rome,Milan Linate,Milan Malpensa,Turin,Genoa,Venice,Bologna,Naples,Bari,Brindisi,Catania,Palermo",
+  options_flights: "Zurich,Geneva,Basel,London,Paris,Amsterdam,Berlin,Munich,Frankfurt,Vienna,Barcelona,Madrid,Lisbon,Athens,New York,Rome,Milan Linate,Milan Malpensa,Turin,Genoa,Venice,Bologna,Naples,Bari,Brindisi,Catania,Palermo",
   export_btn: "Export",
   import_btn: "Import",
   export_error: "Error during export.",
@@ -226,10 +226,10 @@ const it: Translations = {
   flights_btn: "Voli",
   origin: "Origine",
   origin_placeholder_train: "es. Milano Centrale",
-  origin_placeholder_flight: "es. Zurigo",
+  origin_placeholder_flight: "es. Zurigo, o un codice aeroporto come LHR",
   destination: "Destinazione",
   dest_placeholder_train: "es. Roma Termini",
-  dest_placeholder_flight: "es. Roma",
+  dest_placeholder_flight: "es. Londra, o un codice aeroporto come CDG",
   swap_btn: "Inverti",
   outbound_range: "Range Andata",
   outbound_placeholder: "Seleziona date andata",
@@ -341,7 +341,7 @@ const it: Translations = {
   settings_id_placeholder: "ID (es. voucher)",
   reminder_text_placeholder: "Testo del promemoria",
   options_trains: TRAIN_STATION_OPTIONS,
-  options_flights: "Zurigo,Roma,Milano Linate,Milano Malpensa,Torino,Genova,Venezia,Bologna,Napoli,Bari,Brindisi,Catania,Palermo",
+  options_flights: "Zurigo,Ginevra,Basilea,Londra,Parigi,Amsterdam,Berlino,Monaco di Baviera,Francoforte,Vienna,Barcellona,Madrid,Lisbona,Atene,New York,Roma,Milano Linate,Milano Malpensa,Torino,Genova,Venezia,Bologna,Napoli,Bari,Brindisi,Catania,Palermo",
   export_btn: "Esporta",
   import_btn: "Importa",
   export_error: "Errore durante l'esportazione.",
@@ -356,6 +356,13 @@ const it: Translations = {
 };
 
 const dictionaries: Record<Language, Translations> = { en, it };
+
+// The server names its default flight places in English. The option lists of
+// both languages are parallel, so the same position gives the local name.
+export const localizeFlightPlace = (place: string, language: Language): string => {
+  const index = en.options_flights.split(',').indexOf(place);
+  return index < 0 ? place : dictionaries[language].options_flights.split(',')[index];
+};
 
 const LANGUAGE_KEY = 'app_language';
 const listeners = new Set<() => void>();

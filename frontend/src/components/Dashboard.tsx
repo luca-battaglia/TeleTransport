@@ -20,7 +20,7 @@ import {
   type FlightRow,
   type ResultRow,
 } from '@/lib/api';
-import { useLanguage } from '@/lib/i18n';
+import { localizeFlightPlace, useLanguage } from '@/lib/i18n';
 import { useSettings, type Mode } from '@/lib/settings';
 
 registerLocale('it', it);
@@ -171,10 +171,13 @@ export default function Dashboard() {
   const [stored] = useState(() => readJson<StoredDashboard>(sessionStorage, STATE_KEY, {}));
   const [serverConfig, setServerConfig] = useState<AppConfig | null>(null);
 
-  const defaultsFor = (m: Mode) => ({
-    origin: settings.ui?.[m]?.default_origin || serverConfig?.[m].default_origin || FALLBACK_DEFAULTS[m].origin,
-    destination: settings.ui?.[m]?.default_destination || serverConfig?.[m].default_destination || FALLBACK_DEFAULTS[m].destination,
-  });
+  const defaultsFor = (m: Mode) => {
+    const local = (place: string) => (m === 'flights' ? localizeFlightPlace(place, language) : place);
+    return {
+      origin: settings.ui?.[m]?.default_origin || local(serverConfig?.[m].default_origin || FALLBACK_DEFAULTS[m].origin),
+      destination: settings.ui?.[m]?.default_destination || local(serverConfig?.[m].default_destination || FALLBACK_DEFAULTS[m].destination),
+    };
+  };
 
   const [mode, setMode] = useState<Mode>(stored.mode ?? 'trains');
   const [origins, setOrigins] = useState<string[]>(() => stored.origins ?? [defaultsFor(stored.mode ?? 'trains').origin]);
