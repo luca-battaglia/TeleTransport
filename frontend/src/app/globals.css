@@ -53,6 +53,12 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Short names the components use. Declared on body rather than :root so they
+     resolve against the palette body.dark swaps in. */
+  --text: var(--foreground);
+  --text-muted: var(--muted);
+  --bg: var(--background);
 }
 
 /* Glassmorphism Utilities */
@@ -238,6 +244,31 @@ tr:hover .row-action,
 .route-link:focus-visible {
   color: var(--accent);
   text-decoration-color: var(--accent);
+}
+
+.notice {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  background: rgba(38, 139, 210, 0.1);
+  border: 1px solid rgba(38, 139, 210, 0.3);
+}
+
+.site-footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--card-border);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.site-footer a {
+  color: inherit;
 }
 
 /* Typography */

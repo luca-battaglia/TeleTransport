@@ -1,73 +1,66 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
-export default function ThemeToggle() {
-  const [themePref, setThemePref] = useState('system');
-  const [isDark, setIsDark] = useState(false);
+export type ThemePreference = 'system' | 'light' | 'dark';
 
-  const applyTheme = (pref: string) => {
-    let dark = false;
-    if (pref === 'dark') dark = true;
-    else if (pref === 'system') dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (dark) document.body.classList.add('dark');
-    else document.body.classList.remove('dark');
-    
-    setIsDark(dark);
+const THEME_KEY = 'theme_preference';
+const THEME_EVENT = 'themechange';
+
+function subscribe(listener: () => void) {
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  window.addEventListener('storage', listener);
+  window.addEventListener(THEME_EVENT, listener);
+  media.addEventListener('change', listener);
+  return () => {
+    window.removeEventListener('storage', listener);
+    window.removeEventListener(THEME_EVENT, listener);
+    media.removeEventListener('change', listener);
   };
+}
+
+export function readThemePreference(): ThemePreference {
+  try {
+    const value = localStorage.getItem(THEME_KEY);
+    return value === 'light' || value === 'dark' ? value : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+export function setThemePreference(preference: ThemePreference) {
+  localStorage.setItem(THEME_KEY, preference);
+  window.dispatchEvent(new Event(THEME_EVENT));
+}
+
+function readIsDark() {
+  const preference = readThemePreference();
+  return preference === 'dark' || (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
+export default function ThemeToggle() {
+  const preference = useSyncExternalStore(subscribe, readThemePreference, () => 'system' as ThemePreference);
+  const isDark = useSyncExternalStore(subscribe, readIsDark, () => false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('theme_preference') || 'system';
-    setThemePref(saved);
-    applyTheme(saved);
+    document.body.classList.toggle('dark', isDark);
+  }, [isDark]);
 
-    const handleStorage = () => {
-      const updated = localStorage.getItem('theme_preference') || 'system';
-      setThemePref(updated);
-      applyTheme(updated);
-    };
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('themechange', handleStorage);
-
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const mqHandler = () => {
-      if (localStorage.getItem('theme_preference') === 'system' || !localStorage.getItem('theme_preference')) {
-        applyTheme('system');
-      }
-    };
-    mq.addEventListener('change', mqHandler);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('themechange', handleStorage);
-      mq.removeEventListener('change', mqHandler);
-    };
-  }, []);
-
-  const toggleTheme = (toDark: boolean) => {
-    const pref = toDark ? 'dark' : 'light';
-    localStorage.setItem('theme_preference', pref);
-    setThemePref(pref);
-    applyTheme(pref);
-    window.dispatchEvent(new Event('themechange'));
-  };
-
-  if (themePref === 'system') return null;
+  // Following the system theme leaves nothing to toggle.
+  if (preference === 'system') return null;
 
   return (
     <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-      <Sun 
-        size={20} 
-        style={{ cursor: 'pointer', color: isDark ? 'var(--muted)' : 'var(--foreground)' }} 
-        onClick={() => toggleTheme(false)} 
+      <Sun
+        size={20}
+        style={{ cursor: 'pointer', color: isDark ? 'var(--muted)' : 'var(--foreground)' }}
+        onClick={() => setThemePreference('light')}
       />
-      <Moon 
-        size={20} 
-        style={{ cursor: 'pointer', color: isDark ? 'var(--foreground)' : 'var(--muted)' }} 
-        onClick={() => toggleTheme(true)} 
+      <Moon
+        size={20}
+        style={{ cursor: 'pointer', color: isDark ? 'var(--foreground)' : 'var(--muted)' }}
+        onClick={() => setThemePreference('dark')}
       />
     </div>
   );

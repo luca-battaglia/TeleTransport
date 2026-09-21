@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Clock, Train, Plane } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n';
+import type { DateRange, ResultRow } from '@/lib/api';
+import type { Mode } from '@/lib/settings';
 
 export interface HistoryEntry {
   timestamp: number;
@@ -15,50 +17,48 @@ export interface HistoryEntry {
   retEndStr?: string;
   // Every stretch the search covered. Absent on entries saved before pools
   // existed, where the depStartStr/depEndStr span is the whole search.
-  depRanges?: { start: string; end: string }[];
-  retRanges?: { start: string; end: string }[];
+  depRanges?: DateRange[];
+  retRanges?: DateRange[];
   oneWay: boolean;
-  results: any[];
+  results: ResultRow[];
 }
 
 interface HistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: 'trains' | 'flights';
+  mode: Mode;
   history: HistoryEntry[];
   onSelect: (entry: HistoryEntry) => void;
 }
 
-export default function HistoryModal({ isOpen, onClose, mode, history, onSelect }: HistoryModalProps) {
-  const { t, language } = useLanguage();
-
+export default function HistoryModal({ isOpen, onClose, ...props }: HistoryModalProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape' && isOpen) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  // Mounted only while open, so the list's notion of "now" is taken when it opens.
+  return isOpen ? <HistoryList onClose={onClose} {...props} /> : null;
+}
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', { day: 'numeric', month: 'short' });
-  };
+function HistoryList({ onClose, mode, history, onSelect }: Omit<HistoryModalProps, 'isOpen'>) {
+  const { t, language } = useLanguage();
+  const [now] = useState(Date.now);
+
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short' });
 
   const timeAgo = (ms: number) => {
-    const seconds = Math.floor((Date.now() - ms) / 1000);
-    if (seconds < 60) return language === 'it' ? 'Pochi secondi fa' : 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} ${language === 'it' ? 'min fa' : 'min ago'}`;
+    const minutes = Math.floor((now - ms) / 60_000);
+    if (minutes < 1) return t('just_now');
+    if (minutes < 60) return t('minutes_ago', { n: minutes });
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} ${language === 'it' ? 'ore fa' : 'hours ago'}`;
+    if (hours < 24) return t('hours_ago', { n: hours });
     const days = Math.floor(hours / 24);
-    if (days === 1) return language === 'it' ? 'Ieri' : 'Yesterday';
-    return `${days} ${language === 'it' ? 'giorni fa' : 'days ago'}`;
+    return days === 1 ? t('yesterday') : t('days_ago', { n: days });
   };
 
   return (
@@ -68,14 +68,15 @@ export default function HistoryModal({ isOpen, onClose, mode, history, onSelect 
       backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
       zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px'
     }}>
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-panel" 
+        className="glass-panel"
         style={{ width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', position: 'relative' }}
       >
-        <button 
-          onClick={onClose} 
+        <button
+          onClick={onClose}
+          aria-label={t('close')}
           style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
         >
           <X size={24} />
@@ -83,18 +84,18 @@ export default function HistoryModal({ isOpen, onClose, mode, history, onSelect 
 
         <h2 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Clock size={24} color="var(--primary)" />
-          {language === 'it' ? 'Cronologia' : 'History'} ({mode === 'trains' ? t('trains_btn') : t('flights_btn')})
+          {t('history')} ({mode === 'trains' ? t('trains_btn') : t('flights_btn')})
         </h2>
-        
+
         {history.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '32px 0' }}>
-            {language === 'it' ? 'Nessuna ricerca recente.' : 'No recent searches.'}
+            {t('history_empty')}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {history.map((entry, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 onClick={() => {
                   onSelect(entry);
                   onClose();
@@ -126,7 +127,7 @@ export default function HistoryModal({ isOpen, onClose, mode, history, onSelect 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{timeAgo(entry.timestamp)}</span>
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--accent)', background: 'rgba(38, 139, 210, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
-                    {entry.results.length} {language === 'it' ? 'soluzioni' : 'results'}
+                    {t('results_count', { n: entry.results.length })}
                   </span>
                 </div>
               </div>
