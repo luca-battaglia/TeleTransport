@@ -26,6 +26,8 @@ SERPAPI_CACHE_TTL_S = 2 * 3600
 # is the stable public one: it resolves IATA codes and dates reliably.
 GOOGLE_FLIGHTS_URL = "https://www.google.com/travel/flights"
 
+AIRPORT_LIST = re.compile(r"[A-Z]{3}(,[A-Z]{3})*", re.IGNORECASE)
+
 DateSpan = Tuple[date, date]
 
 
@@ -86,16 +88,19 @@ def build_booking_url(
 
 
 def resolve_iata(name: str, mapping: Mapping[str, str]) -> str:
-    """Map a free-text place to an IATA code through substring rules.
+    """Map a free-text place to IATA codes through substring rules.
 
-    Rules are tried in order, so specific ones ("linate") must come before
-    generic ones ("milan"). Anything unmatched that looks like a code passes through.
+    A city with several airports maps to all of them ("FCO,CIA"): Google Flights
+    takes a comma-separated list, but not metropolitan codes such as ROM. Rules
+    are tried in order, so specific ones ("linate") must come before generic
+    ones ("milan"). Anything unmatched that looks like codes passes through.
     """
     lowered = name.strip().lower()
     for key, iata in mapping.items():
         if key.lower() in lowered:
             return iata.upper()
-    return name.strip().upper() if len(name.strip()) == 3 else name.strip()
+    compact = re.sub(r"\s+", "", name)
+    return compact.upper() if AIRPORT_LIST.fullmatch(compact) else name.strip()
 
 
 def daterange(d1: date, d2: date) -> List[date]:
@@ -170,20 +175,18 @@ def connections_count(item: Dict[str, Any]) -> int:
     return 0
 
 
-def airport_transfer_cost(scoring: FlightsScoringConfig, one_way: bool, origin: str, destination: str) -> float:
-    """Ground cost of reaching the airports on this route: once one-way, twice round trip."""
+def airport_transfer_cost(scoring: FlightsScoringConfig, airports: Iterable[str]) -> float:
+    """Ground cost of getting to or from each airport a trip uses, once per use."""
     total = 0.0
-    for iata in {origin, destination}:
+    for iata in airports:
         extras = scoring.airport_extras.get(iata)
         if not extras:
             continue
-        uses = (1 if one_way else 2) * (int(iata == origin) + int(iata == destination))
-        cost = (
+        total += (
             float(extras.get("fuel_eur", 0.0))
             + float(extras.get("personal_drive_hours", 0.0)) * float(scoring.time_value_eur_per_hour)
             + float(extras.get("companions_drive_hours", 0.0)) * float(scoring.companions_time_value_eur_per_hour)
         )
-        total += cost * uses
     return total
 
 
@@ -247,6 +250,14 @@ def first_last_times(item: Dict[str, Any], fallback_day: date) -> Tuple[datetime
     if not arr_has_date and arr < dep:
         arr += timedelta(days=1)
     return dep, arr
+
+
+def end_airports(item: Dict[str, Any], origin: str, destination: str) -> Tuple[str, str]:
+    """The airports a result actually leaves from and lands at, which may be any of those searched."""
+    fl = item.get("flights") or []
+    first = (fl[0].get("departure_airport") or {}).get("id") if fl else None
+    last = (fl[-1].get("arrival_airport") or {}).get("id") if fl else None
+    return first or origin, last or destination
 
 
 def get_total_duration(item: Dict[str, Any]) -> int:
@@ -380,7 +391,6 @@ async def build_oneway_rows(
     dep_span: DateSpan,
     defaults: FlightsDefaultsConfig,
     scoring: FlightsScoringConfig,
-    ground_extra_eur: float,
 ) -> List[RankedRow]:
 
     async def fetch_day(dep_day: date) -> List[RankedRow]:
@@ -399,15 +409,16 @@ async def build_oneway_rows(
                 continue
 
             dur = get_total_duration(item)
+            dep_airport, arr_airport = end_airports(item, origin, destination)
             adjusted = (
                 float(price)
                 + time_value_cost(dur, scoring)
                 + early_departure_penalty(dep, scoring)
                 + late_arrival_penalty(arr, scoring)
                 + connections_count(item) * float(scoring.connection_penalty_eur)
-                + ground_extra_eur
+                + airport_transfer_cost(scoring, (dep_airport, arr_airport))
             )
-            rows.append(RankedRow(origin, destination, dep, arr, None, None, dur, price, adjusted))
+            rows.append(RankedRow(dep_airport, arr_airport, dep, arr, None, None, dur, price, adjusted))
         return rows
 
     return await gather_rows(fetch_day(d) for d in daterange(*dep_span))
@@ -422,7 +433,6 @@ async def build_roundtrip_rows(
     ret_span: DateSpan,
     defaults: FlightsDefaultsConfig,
     scoring: FlightsScoringConfig,
-    ground_extra_eur: float,
 ) -> List[RankedRow]:
     """Rank round trips: one lookup for the outbounds of a date pair, one per outbound for its returns.
 
@@ -444,6 +454,7 @@ async def build_roundtrip_rows(
                 continue
             out_dur = get_total_duration(out_item)
             out_conns = connections_count(out_item)
+            out_from, out_to = end_airports(out_item, origin, destination)
 
             try:
                 resp_ret = await serpapi_get_async(client, {**base, "departure_token": out_item["departure_token"]})
@@ -461,6 +472,7 @@ async def build_roundtrip_rows(
                     continue
 
                 total_dur = out_dur + get_total_duration(ret_item)
+                ret_from, ret_to = end_airports(ret_item, destination, origin)
                 adjusted = (
                     float(price)
                     + time_value_cost(total_dur, scoring)
@@ -469,9 +481,9 @@ async def build_roundtrip_rows(
                     + late_arrival_penalty(out_arr, scoring)
                     + late_arrival_penalty(in_arr, scoring)
                     + (out_conns + connections_count(ret_item)) * float(scoring.connection_penalty_eur)
-                    + ground_extra_eur
+                    + airport_transfer_cost(scoring, (out_from, out_to, ret_from, ret_to))
                 )
-                rows.append(RankedRow(origin, destination, out_dep, out_arr, in_dep, in_arr, total_dur, price, adjusted))
+                rows.append(RankedRow(out_from, out_to, out_dep, out_arr, in_dep, in_arr, total_dur, price, adjusted))
         return rows
 
     pairs = [(d, r) for d in daterange(*dep_span) for r in daterange(*ret_span) if r > d]
@@ -508,14 +520,12 @@ async def build_rows_multi(
     scoring: FlightsScoringConfig,
 ) -> List[RankedRow]:
     """Rank every origin/destination pair over one outbound span (and one return span)."""
-    one_way = ret_span is None
     jobs = []
     for o, d in expand_pairs(origins, destinations):
-        extra = airport_transfer_cost(scoring, one_way=one_way, origin=o, destination=d)
         if ret_span is None:
-            jobs.append(build_oneway_rows(client, api_key, o, d, dep_span, defaults, scoring, extra))
+            jobs.append(build_oneway_rows(client, api_key, o, d, dep_span, defaults, scoring))
         else:
-            jobs.append(build_roundtrip_rows(client, api_key, o, d, dep_span, ret_span, defaults, scoring, extra))
+            jobs.append(build_roundtrip_rows(client, api_key, o, d, dep_span, ret_span, defaults, scoring))
 
     rows = await gather_rows(jobs)
     rows.sort(key=lambda x: (x.adjusted_cost, x.total_duration_min))

@@ -11,6 +11,7 @@ MAX_ENDPOINTS = 5
 
 Place = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 IataCode = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+AirportList = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}(,[A-Z]{3}){0,7}$")]
 Money = Annotated[float, Field(ge=0, le=10_000)]
 Hours = Annotated[float, Field(ge=0, le=48)]
 HourOfDay = Annotated[int, Field(ge=0, le=24)]
@@ -73,7 +74,7 @@ class FlightOverrides(_Strict):
 
 
 class FlightUiOverrides(_Strict):
-    iata_mapping: Optional[Dict[Place, IataCode]] = Field(default=None, max_length=100)
+    iata_mapping: Optional[Dict[Place, AirportList]] = Field(default=None, max_length=100)
 
 
 class UiOverrides(_Strict):

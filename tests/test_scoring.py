@@ -2,7 +2,8 @@ from datetime import datetime
 
 import pytest
 
-from core.flights import FlightsScoringConfig, airport_transfer_cost, late_arrival_penalty
+from core.flights import FlightsScoringConfig, airport_transfer_cost, late_arrival_penalty, resolve_iata
+from core.search import DEFAULT_IATA_MAPPING
 from core.trains import TrainScoringConfig, compute_solution_metrics
 
 
@@ -52,13 +53,23 @@ def test_flight_late_arrival_wraps_past_midnight():
     assert late_arrival_penalty(datetime(2026, 10, 3, 12, 0), scoring) == 0
 
 
-def test_airport_extras_apply_once_one_way_and_twice_round_trip():
+def test_airport_extras_apply_once_per_use_of_the_airport():
     scoring = FlightsScoringConfig(
         time_value_eur_per_hour=20,
         companions_time_value_eur_per_hour=8,
         airport_extras={"BDS": {"fuel_eur": 30, "personal_drive_hours": 1.5, "companions_drive_hours": 3}},
     )
     one_leg = 30 + 1.5 * 20 + 3 * 8
-    assert airport_transfer_cost(scoring, True, "ZRH", "BDS") == pytest.approx(one_leg)
-    assert airport_transfer_cost(scoring, False, "ZRH", "BDS") == pytest.approx(2 * one_leg)
-    assert airport_transfer_cost(scoring, True, "ZRH", "BRI") == 0
+    assert airport_transfer_cost(scoring, ["ZRH", "BDS"]) == pytest.approx(one_leg)
+    assert airport_transfer_cost(scoring, ["ZRH", "BDS", "BDS", "ZRH"]) == pytest.approx(2 * one_leg)
+    assert airport_transfer_cost(scoring, ["ZRH", "BRI"]) == 0
+
+
+def test_places_resolve_to_airport_lists_since_city_codes_find_nothing():
+    mapping = {"linate": "LIN", "milan": "MXP,LIN,BGY", "rome": "FCO,CIA"}
+    assert resolve_iata("Milan Linate", mapping) == "LIN"
+    assert resolve_iata("Milan", mapping) == "MXP,LIN,BGY"
+    assert resolve_iata("Rome", mapping) == "FCO,CIA"
+    assert resolve_iata("lhr, lgw", mapping) == "LHR,LGW"
+    assert resolve_iata("Somewhere", mapping) == "Somewhere"
+    assert all(len(code) == 3 for codes in DEFAULT_IATA_MAPPING.values() for code in codes.split(","))

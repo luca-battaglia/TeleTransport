@@ -454,10 +454,12 @@ export default function Dashboard() {
       return;
     }
     const mapping = settings.ui?.flights?.iata_mapping ?? serverConfig?.flights.iata_mapping ?? {};
+    // A city mapped to several airports stays a name: the text query reads
+    // "Rome" reliably, a list like "FCO,CIA" not necessarily.
     const toCode = (name: string) => {
       const lowered = name.toLowerCase();
       const hit = Object.entries(mapping).find(([key]) => lowered.includes(key.toLowerCase()));
-      return hit ? hit[1] : name;
+      return hit && /^[A-Z]{3}$/.test(hit[1]) ? hit[1] : name;
     };
     const dep = depDateRange[0] ? formatDateKey(depDateRange[0]) : '';
     const ret = retDateRange[0] ? formatDateKey(retDateRange[0]) : '';

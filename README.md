@@ -13,6 +13,7 @@ A €30 flight at 05:40 with a two-hour drive to the airport is rarely cheaper t
 
 - Trains from Trenitalia, flights from Google Flights (through [SerpApi](https://serpapi.com))
 - Up to 5 origins × 5 destinations and up to 14 days per direction in one search, non-consecutive days included
+- A city with several airports is searched on all of them at once: Milan means Malpensa, Linate and Bergamo
 - Every weight is configurable, in the web app or in [`travel_ranker.toml`](travel_ranker.toml)
 - Each result links to the operator's own search for that route and day, ready to book
 - A web app in English and Italian, and a CLI with the same options, both on one engine

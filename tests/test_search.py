@@ -31,9 +31,11 @@ def test_query_drops_blank_places():
     assert query.one_way
 
 
-def flight(dep: str, arr: str, minutes: int, price: int, token: str = "") -> dict:
+def flight(dep: str, arr: str, minutes: int, price: int, token: str = "", route: tuple = ()) -> dict:
+    departure = {"time": dep, **({"id": route[0]} if route else {})}
+    arrival = {"time": arr, **({"id": route[1]} if route else {})}
     item = {
-        "flights": [{"departure_airport": {"time": dep}, "arrival_airport": {"time": arr}, "duration": minutes}],
+        "flights": [{"departure_airport": departure, "arrival_airport": arrival, "duration": minutes}],
         "total_duration": minutes,
         "price": price,
     }
@@ -63,6 +65,25 @@ def test_one_way_rows_are_ranked_by_adjusted_cost_not_price():
     # The 05:00 flight is 20 EUR cheaper but four hours before 09:00 costs 80.
     assert [r["price_eur"] for r in rows] == [70, 50]
     assert rows[0]["booking_url"].startswith("https://www.google.com/travel/flights?")
+
+
+def test_a_city_is_searched_on_all_its_airports_and_rows_name_the_one_used():
+    searched = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        searched.append(request.url.params.get("arrival_id"))
+        return httpx.Response(200, json={
+            "search_metadata": {"status": "Success"},
+            "best_flights": [flight("2026-10-08 10:00", "2026-10-08 11:30", 90, 80, route=("ZRH", "CIA"))],
+        })
+
+    cfg = {**NO_CACHE, "flights": {**NO_CACHE["flights"], "airport_extras": {"CIA": {"fuel_eur": 25}}}}
+    query = SearchQuery.create(["Zurich"], ["Rome"], [(d(8), d(8))])
+    rows = run(search_flights(query, cfg, API_KEY, client=serpapi(handler)))
+    assert searched == ["FCO,CIA"]
+    assert (rows[0]["origin"], rows[0]["destination"]) == ("ZRH", "CIA")
+    assert "CIA" in rows[0]["booking_url"] and "FCO" not in rows[0]["booking_url"]
+    assert rows[0]["adjusted_cost"] == pytest.approx(80 + 1.5 * 20 + 25)
 
 
 def test_round_trip_uses_the_total_price_from_the_return_leg():

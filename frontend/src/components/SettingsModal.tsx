@@ -129,7 +129,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
     const iataMapping: Record<string, string> = {};
     for (const line of ui.iataMapping.split('\n')) {
       const [name, code] = line.split('=').map(part => part?.trim());
-      if (name && code && /^[A-Za-z]{3}$/.test(code)) iataMapping[name] = code.toUpperCase();
+      if (name && code && /^[A-Za-z]{3}(,[A-Za-z]{3}){0,7}$/.test(code)) iataMapping[name] = code.toUpperCase();
     }
 
     const extras: Record<string, AirportExtra> = {};
@@ -395,7 +395,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
               </div>
               <div className="form-group">
                 <label className="form-label">{t("iata_mapping")}</label>
-                <textarea value={ui.iataMapping} onChange={e => setUi(prev => ({ ...prev, iataMapping: e.target.value }))} rows={4} placeholder={"roma=ROM\nlinate=LIN\nmalpensa=MXP"} style={inputStyle} />
+                <textarea value={ui.iataMapping} onChange={e => setUi(prev => ({ ...prev, iataMapping: e.target.value }))} rows={4} placeholder={"linate=LIN\nmalpensa=MXP\nroma=FCO,CIA"} style={inputStyle} />
               </div>
             </div>
           </div>
