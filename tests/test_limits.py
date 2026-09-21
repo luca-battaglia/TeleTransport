@@ -48,3 +48,44 @@ def test_a_failed_search_gives_the_client_its_search_back(limits):
     reservation = limits.reserve_demo("a", 2)
     limits.settle_demo(reservation, used_calls=2, succeeded=False)
     assert limits.demo_searches_left("a") == 2
+
+
+def request(peer, **headers):
+    from starlette.requests import Request
+
+    raw = [(name.replace("_", "-").encode(), value.encode()) for name, value in headers.items()]
+    return Request({"type": "http", "headers": raw, "client": (peer, 1234)})
+
+
+@pytest.fixture
+def proxied_limits(tmp_path):
+    return UsageLimits(
+        diskcache.Cache(str(tmp_path)),
+        searches_per_hour=3,
+        demo_daily_calls=6,
+        demo_client_daily_searches=2,
+        proxy_secret="s3cret",
+    )
+
+
+def test_a_public_caller_cannot_forge_its_address(proxied_limits):
+    forged = request("81.2.69.160", x_forwarded_for="2.125.160.216", x_client_ip="2.125.160.216")
+    assert proxied_limits.client_ip(forged) == "81.2.69.160"
+
+
+def test_behind_a_local_reverse_proxy_the_last_hop_counts(proxied_limits):
+    via_proxy = request("172.18.0.2", x_forwarded_for="2.125.160.216, 81.2.69.160")
+    assert proxied_limits.client_ip(via_proxy) == "81.2.69.160"
+
+
+def test_the_web_app_proxy_vouches_for_the_visitor_with_the_secret(proxied_limits):
+    signed = request("172.18.0.2", x_forwarded_for="76.76.21.21", x_client_ip="89.160.20.112", x_proxy_secret="s3cret")
+    assert proxied_limits.client_ip(signed) == "89.160.20.112"
+
+    wrong = request("172.18.0.2", x_forwarded_for="76.76.21.21", x_client_ip="89.160.20.112", x_proxy_secret="guess")
+    assert proxied_limits.client_ip(wrong) == "76.76.21.21"
+
+
+def test_without_a_configured_secret_the_client_ip_header_is_ignored(limits):
+    unsigned = request("172.18.0.2", x_forwarded_for="76.76.21.21", x_client_ip="89.160.20.112", x_proxy_secret="")
+    assert limits.client_ip(unsigned) == "76.76.21.21"

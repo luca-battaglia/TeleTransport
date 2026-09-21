@@ -33,13 +33,13 @@ Ties are broken by duration. A round-trip flight is priced as a whole, with the 
 ## Architecture
 
 ```text
- Browser ──► Next.js (Vercel) ──/api rewrite──► Cloudflare Tunnel ──► FastAPI (ARM VM)
-                                                                          │
- CLI ─────────────────────────────────────────────────────────────► core/search.py
-                                                                          │
-                                         ┌────────────────────────────────┴──────┐
-                                   core/trains.py                          core/flights.py
-                             LeFrecce JSON endpoints                  SerpApi Google Flights
+ Browser ──► Next.js (Vercel) ──/api proxy──► Caddy (TLS) ──► FastAPI (ARM VM)
+                                                                 │
+ CLI ───────────────────────────────────────────────────► core/search.py
+                                                                 │
+                                          ┌──────────────────────┴──────────────────────┐
+                                   core/trains.py                                core/flights.py
+                               LeFrecce JSON endpoints                       SerpApi Google Flights
                              (headless browser context)
 ```
 
@@ -56,7 +56,7 @@ Some decisions worth knowing about:
 - **One engine, two front ends.** The API and the CLI build the same `SearchQuery` and call the same functions in `core/search.py`, so they cannot rank differently.
 - **Trenitalia has no public API.** The client calls the two JSON endpoints the Trenitalia website itself uses (station lookup and solution search) from a headless browser context that holds the site's cookies. The browser only starts on a cache miss.
 - **Caching.** Upstream responses are cached in SQLite through `diskcache`: flight searches for 2 hours, Trenitalia result pages for 30 minutes, station lookups for a day. Repeating a search costs nothing upstream.
-- **No public HTTP port on the server.** The API is reachable only through a Cloudflare Tunnel, and the browser only ever talks to the Vercel origin, which proxies `/api`.
+- **One public entry point.** The browser only talks to the Vercel origin, whose server-side proxy ([`frontend/src/proxy.ts`](frontend/src/proxy.ts)) forwards `/api` to the server. There, Caddy terminates TLS and is the only public HTTP listener; FastAPI itself sits behind the firewall.
 
 ## Running it locally
 
@@ -80,7 +80,7 @@ npm install
 npm run dev                        # http://localhost:3000
 ```
 
-The web app proxies `/api/*` to `NEXT_PUBLIC_BACKEND_URL` (default `http://127.0.0.1:8000`). In the web app the SerpApi key goes in Settings.
+The web app proxies `/api/*` to `BACKEND_URL` (default `http://127.0.0.1:8000`). In the web app the SerpApi key goes in Settings. When deploying, give the web app and the API the same random `BACKEND_PROXY_SECRET`, so the API can tell visitors apart behind the proxy.
 
 ## CLI
 
@@ -118,7 +118,7 @@ Search bodies carry `origins`, `destinations`, `dep_ranges`, `ret_ranges` (`[{"s
 
 - A SerpApi key entered in the web app stays in that browser and is sent only with flight searches. The server neither stores nor logs it.
 - `X-Config` is validated against a whitelist: clients can change scoring weights and their own lookups, never limits, retries or caching.
-- Every client gets an hourly search budget, and concurrent train searches are capped. Client IP addresses are kept only as salted hashes, in counters that expire within two days.
+- Every client gets an hourly search budget, and concurrent train searches are capped. The client address comes only from sources a caller cannot forge: the web app's proxy vouches for each visitor's address with a secret it shares with the API, and any other caller is identified by its own connection. Addresses are kept only as salted hashes, in counters that expire within two days.
 - Visitors without a key can try flights on a shared demo quota: small searches only (one route, up to three days), a few per visitor per day, under a global daily cap sized below the SerpApi free plan. Failed and cached searches are refunded.
 - Deploys run the test suite first, then sync over SSH to a pinned host key.
 

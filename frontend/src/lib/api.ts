@@ -1,4 +1,4 @@
-// Requests go to /api on this origin; next.config.ts rewrites them to the backend,
+// Requests go to /api on this origin; src/proxy.ts forwards them to the backend,
 // so the browser never talks to the backend directly and needs no CORS.
 
 import { configOverrides, loadSettings, type Mode } from './settings';

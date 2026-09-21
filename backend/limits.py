@@ -7,6 +7,8 @@ processes and survive restarts.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import ipaddress
 import secrets
 import time
 from dataclasses import dataclass
@@ -35,27 +37,47 @@ class UsageLimits:
         searches_per_hour: int,
         demo_daily_calls: int,
         demo_client_daily_searches: int,
+        proxy_secret: str = "",
     ) -> None:
         self.cache = cache
         self.searches_per_hour = searches_per_hour
         self.demo_daily_calls = demo_daily_calls
         self.demo_client_daily_searches = demo_client_daily_searches
+        self._proxy_secret = proxy_secret.encode()
         # A stable per-install salt, so client ids survive restarts but cannot be
         # reversed into IP addresses by anyone who reads the cache.
         self.cache.add("limits:salt", secrets.token_hex(16))
         self._salt = self.cache.get("limits:salt")
 
-    def client_id(self, request: Request) -> str:
-        """A salted hash of the caller's IP address; the raw address is never stored.
+    def client_ip(self, request: Request) -> str:
+        """The caller's IP address, taken only from sources a caller cannot forge.
 
-        Requests reach the backend through the Vercel rewrite, which sets the first
-        X-Forwarded-For hop to the visitor's address. Someone calling the backend
-        directly could forge that header, which is why the demo budget also has a
-        global daily cap that no client identity gets around.
+        The web app's server-side proxy sends every visitor from its host's own
+        addresses, so it passes the visitor's address in X-Client-IP and proves it
+        with the shared X-Proxy-Secret. Other callers are identified by the TCP
+        peer, or, when that peer is a reverse proxy on a private network, by the
+        X-Forwarded-For hop that proxy appended.
         """
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        ip = forwarded or (request.client.host if request.client else "unknown")
-        return hashlib.sha256(f"{self._salt}:{ip}".encode()).hexdigest()[:24]
+        supplied = request.headers.get("x-proxy-secret", "").encode()
+        if self._proxy_secret and hmac.compare_digest(supplied, self._proxy_secret):
+            forwarded = request.headers.get("x-client-ip", "").strip()
+            if forwarded:
+                return forwarded
+
+        peer = request.client.host if request.client else ""
+        try:
+            behind_proxy = ipaddress.ip_address(peer).is_private
+        except ValueError:
+            behind_proxy = False
+        if behind_proxy:
+            hops = [hop.strip() for hop in request.headers.get("x-forwarded-for", "").split(",") if hop.strip()]
+            if hops:
+                return hops[-1]
+        return peer or "unknown"
+
+    def client_id(self, request: Request) -> str:
+        """A salted hash of the caller's IP address; the raw address is never stored."""
+        return hashlib.sha256(f"{self._salt}:{self.client_ip(request)}".encode()).hexdigest()[:24]
 
     def allow_search(self, client: str) -> bool:
         window = int(time.time() // _HOUR_S)

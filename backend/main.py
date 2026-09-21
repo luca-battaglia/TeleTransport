@@ -1,4 +1,4 @@
-"""HTTP API over core/. The web app reaches it through a same-origin Next.js rewrite."""
+"""HTTP API over core/. The web app reaches it through its own server-side proxy (frontend/src/proxy.ts)."""
 
 from __future__ import annotations
 
@@ -71,6 +71,7 @@ limits = UsageLimits(
     searches_per_hour=_env_int("RATE_LIMIT_SEARCHES_PER_HOUR", 40),
     demo_daily_calls=_env_int("DEMO_DAILY_CALLS", 8),
     demo_client_daily_searches=_env_int("DEMO_CLIENT_DAILY_SEARCHES", 2),
+    proxy_secret=os.getenv("BACKEND_PROXY_SECRET", "").strip(),
 )
 train_slots = asyncio.Semaphore(MAX_CONCURRENT_TRAIN_SEARCHES)
 

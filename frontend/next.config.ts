@@ -1,19 +1,8 @@
 import type { NextConfig } from "next";
 
-const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
-
+// /api is forwarded to the backend by src/proxy.ts.
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  async rewrites() {
-    // Server-side proxy: the browser only ever calls this origin, and the
-    // backend's address never reaches the client bundle.
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`,
-      },
-    ];
-  },
   async headers() {
     return [
       {
