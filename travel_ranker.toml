@@ -1,162 +1,98 @@
-# travel_ranker.toml
-# Unified config for:
-# - trains.py (LeFrecce / lefrecce.it BFF)
-# - flights.py  (Google Flights via SerpApi)
+# TeleTransport configuration, shared by the API and the CLI.
 #
-# Order of precedence:
-#   CLI  >  TOML  >  default hardcoded
-#
-# Automatic search for the file (when --config is NOT passed):
-# - ./travel_ranker.toml
-# - ~/.config/travel_ranker.toml
-# - or the environment variable: TRAVEL_RANKER_CONFIG=/path/to/file.toml
+# Every key is optional: anything missing falls back to the default in the code.
+# The file is looked up in this order, first match wins:
+#   1. the path in the TRAVEL_RANKER_CONFIG environment variable
+#   2. ./travel_ranker.toml
+#   3. ~/.config/travel_ranker.toml
 
+# Notes printed before a search. A plain string applies to flights; a table can
+# target "trains", "flights" or "both".
 [reminders]
-booking = "!!! REMEMBER TO USE THE 15€ BONUS ON 15€ SU BOOKING.COM !!!"
+# voucher = { text = "Use the hotel voucher before it expires", target = "both" }
 
 
-# =============================================================================
-# TRAINS (trains.py)
-# =============================================================================
 [trains]
-# Filters / limits
-min_price = 32.0          # €: discard SALEABLE solutions with base price < min_price
-max_per_day = 120         # max rows accepted per day and per route (after filters/scoring)
-page_size = 40            # endpoint pagination: limit/offset (higher = fewer calls)
-limit = 50                # how many rows to print in table (top-N after sorting)
+min_price = 20.0          # EUR: ignore solutions cheaper than this
+max_per_day = 120         # solutions kept per day and per route
+page_size = 40            # solutions requested per page (higher = fewer calls)
 
-# Only for interactive wizard (when trains.py runs with no CLI arguments)
-wizard_min_price = 5.0   # €: min_price used in wizard
+# LeFrecce sometimes answers with empty or repeated pages before its results
+# are ready. These bound the polling; they do not change what is found.
+poll_empty_retries = 6
+poll_dup_retries = 4
+poll_sleep_base = 0.6     # seconds, base of the jittered backoff
+scan_cap_mult = 25        # stop after max(300, max_per_day * scan_cap_mult) solutions scanned
+api_timeout_ms = 45000
+api_retries = 6
 
-# Network robustness/polling (does not change features, only retry/anti-loop)
-poll_empty_retries = 6    # how many times to retry if a page is empty
-poll_dup_retries = 4      # how many times to retry if a page contains only duplicates
-poll_sleep_base = 0.6     # seconds: base for backoff with jitter (grows with the attempt count)
-scan_cap_mult = 25        # scan_cap = max(300, max_per_day * scan_cap_mult)
-api_timeout_ms = 45000    # ms: timeout for single API call
-api_retries = 6           # retry for temporary statuses (429/5xx/timeout ecc.)
-
-# Scoring (ranking): sort by adjusted_cost, then duration, then departure time.
-# adjusted_cost = base_price
-#               + (duration_hours * time_value_eur_per_hour)
-#               + early_departure_penalty
-#               + late_arrival_penalty
-#               + (changes * change_penalty_eur)
-[trains.scoring]
-time_value_eur_per_hour = 20.0            # €/h: how much a travel hour is worth (più alto => preferisci più breve)
-early_departure_ref_hour = 9              # ora: if you depart before this hour, proportional penalty triggers
-early_departure_penalty_eur_per_hour = 20.0
-
-late_arrival_start_hour = 22              # ora: if you arrive after, proportional penalty triggers
-overnight_end_hour = 5                    # ora: arrivals between 00:00 and this hour -> penalty continues after midnight
-late_arrival_penalty_eur_per_hour = 15.0
-
-change_penalty_eur = 5.0                  # € per change (changes = number of routes - 1)
-
-
-# =============================================================================
-# FLIGHTS (flights.py) - Google Flights via SerpApi
-# =============================================================================
-[flights]
-# Query parameters SerpApi / Google Flights
-currency = "EUR"      # currency
-hl = "it"             # language (hl)
-gl = "it"             # geo (gl)
-
-# SerpApi options
-deep_search = true    # more complete (slower / more calls), often more results
-show_hidden = true    # includes "hidden" flights
-no_cache = false      # true = forces refresh, ignores cache
-
-# Output
-dedup = true          # true = removes identical rows (same times/duration/price)
-
-# Filters / limits
-min_price = 3         # €: discard flights with price < min_price (utile contro parsing/risultati anomali)
-top_outbounds = 10    # A/R: for each date pair, take up to N outbound candidates
-top_returns = 20      # A/R: for each chosen outbound, take up to N returns
-top_flights = 80      # one-way: for each day, take up to N flights (best_flights + other_flights)
-limit = 50            # how many rows to print in table
-
-# Scoring (ranking)
-# One-way:
 # adjusted_cost = price
-#               + (duration_hours * time_value_eur_per_hour)
-#               + early_departure_penalty
-#               + late_arrival_penalty
-#               + (connections * connection_penalty_eur)
-#
-# Round-trip (NOTE: in the code the "price" used is the return one, as in the original):
-# adjusted_cost = return_price
-#               + value_time(durata_andata + durata_ritorno)
-#               + early(andata) + early(ritorno)
-#               + late(andata)  + late(ritorno)
-#               + penalty_connessioni(andata+ritorno)
-#
-#
-# EXTRA Brindisi (BDS) e altri aeroporti: configurati dinamicamente.
+#               + duration_hours * time_value_eur_per_hour
+#               + hours before early_departure_ref_hour * early_departure_penalty_eur_per_hour
+#               + hours after late_arrival_start_hour * late_arrival_penalty_eur_per_hour
+#               + changes * change_penalty_eur
+[trains.scoring]
+time_value_eur_per_hour = 20.0
+early_departure_ref_hour = 9
+early_departure_penalty_eur_per_hour = 20.0
+late_arrival_start_hour = 22
+overnight_end_hour = 5    # arrivals from midnight to this hour keep counting as late
+late_arrival_penalty_eur_per_hour = 15.0
+change_penalty_eur = 5.0
+
+
+[flights]
+currency = "EUR"
+hl = "it"                 # Google Flights interface language
+gl = "it"                 # Google Flights country
+
+deep_search = true        # slower, closer to what the Google Flights site shows
+show_hidden = true        # include flights Google hides by default
+no_cache = false          # true = always ask SerpApi, ignoring its cache
+dedup = true              # drop rows identical in times, duration and price
+
+min_price = 3             # EUR: ignore prices below this, usually parsing noise
+top_outbounds = 10        # round trip: outbound candidates per date pair (one SerpApi call each)
+top_returns = 20          # round trip: returns kept per outbound
+top_flights = 80          # one-way: flights kept per day
+
+# Same shape as trains, with connections in place of changes. Round trips add
+# the penalties of both legs; the price is the round-trip total.
 [flights.scoring]
 time_value_eur_per_hour = 20.0
 early_departure_ref_hour = 9
 early_departure_penalty_eur_per_hour = 20.0
 late_arrival_start_hour = 22
+overnight_end_hour = 5
 late_arrival_penalty_eur_per_hour = 15.0
 connection_penalty_eur = 5.0
-
-# Companions hourly cost (€/h)
 companions_time_value_eur_per_hour = 8.0
 
-[flights.airport_extras.BDS]
-fuel_eur = 30.0
-personal_drive_hours = 1.5
-companions_drive_hours = 3.0
+# Cost of getting to and from an airport, added once per use of the airport
+# (twice on a round trip). Drive hours are priced at the time values above.
+[flights.airport_extras]
+# BDS = { fuel_eur = 30.0, personal_drive_hours = 1.5, companions_drive_hours = 3.0 }
 
-# =============================================================================
-# USER INTERFACE (UI) & DEFAULTS
-# =============================================================================
-[ui]
 
+# Defaults the web app starts from. Train stations must use their Italian
+# names, since that is what the LeFrecce station lookup matches.
 [ui.trains]
-default_origin = "Zurigo HB"
-default_destination = "Alessandria"
-options = [
-    "Torino ( Tutte Le Stazioni )",
-    "Alessandria",
-    "Zurigo HB",
-    "Bari Centrale",
-    "Lecce",
-    "Milano Centrale",
-    "Roma Termini",
-    "Napoli Centrale",
-    "Venezia S. Lucia",
-    "Bologna Centrale"
-]
+default_origin = "Milano Centrale"
+default_destination = "Roma Termini"
 
 [ui.flights]
-default_origin = "Zurigo"
-default_destination = "Bari"
-options = [
-    "Zurigo",
-    "Bari",
-    "Brindisi",
-    "Torino",
-    "Milano Linate",
-    "Milano Malpensa",
-    "Genova",
-    "Roma",
-    "Napoli",
-    "Catania",
-    "Palermo",
-    "Venezia",
-    "Bologna"
-]
+default_origin = "Zurich"
+default_destination = "Rome"
 
+# Substring rules from place names to IATA codes, tried in order: put specific
+# airports before the city that contains them.
 [ui.flights.iata_mapping]
 zurigo = "ZRH"
 zurich = "ZRH"
 bari = "BRI"
 brindisi = "BDS"
 torino = "TRN"
+turin = "TRN"
 linate = "LIN"
 malpensa = "MXP"
 milan = "MIL"

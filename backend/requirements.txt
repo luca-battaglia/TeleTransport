@@ -1,9 +1,0 @@
-fastapi>=0.100.0
-uvicorn>=0.23.0
-pydantic>=2.0.0
-diskcache>=5.6.3
-httpx>=0.25.0
-# Required at import time by core/: trains.py imports playwright and
-# flights.py imports tabulate, both at module level.
-playwright>=1.40.0
-tabulate>=0.9.0

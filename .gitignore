@@ -1,33 +1,25 @@
-# Virtual environments
+# Python
 .venv/
 venv/
-env/
-
-# Keys and local configuration
-.env
-.env.local
-*.toml
-!travel_ranker.toml
-
-# Python cache
 __pycache__/
 *.py[cod]
-*$py.class
+.pytest_cache/
+.ruff_cache/
 
-# IDEs and tooling
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Upstream response cache and rate-limit counters
+.cache/
+backend/backend_cache/
+
+# Editors and OS
 .vscode/
 .idea/
 *.swp
-
-# Log
-*.log
-log.json
-# OS specific
 .DS_Store
 Thumbs.db
 
-# Application cache
-backend_cache/
-backend/backend_cache/
-
-
+*.log
