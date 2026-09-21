@@ -7,7 +7,7 @@ Train and flight search that ranks trips by what they cost you, not by the ticke
 
 **Live:** [teletransport.vercel.app](https://teletransport.vercel.app)
 
-![TeleTransport ranking trains between Milan and Rome](docs/demo.gif)
+![TeleTransport ranking three days of flights from the Milan airports to the London ones](docs/demo.gif)
 
 A €30 flight at 05:40 with a two-hour drive to the airport is rarely cheaper than a €55 train after breakfast. TeleTransport puts a number on that. It searches Trenitalia and Google Flights over a range of dates, turns travel time, early starts, late arrivals, changes and airport transfers into euros, and sorts every option by the resulting **adjusted cost**.
 
