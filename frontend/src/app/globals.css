@@ -531,6 +531,40 @@ tr:hover .row-action,
   color: inherit;
 }
 
+/* A secret field with a button inside its right edge that shows or hides the value. */
+.secret-field {
+  position: relative;
+}
+
+.secret-field input {
+  display: block;
+  padding-right: 44px;
+}
+
+/* Edge draws its own reveal button in password fields, which would sit beside this one. */
+.secret-field input::-ms-reveal {
+  display: none;
+}
+
+.secret-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: none;
+  color: var(--muted);
+  border-radius: var(--radius);
+}
+
+.secret-toggle:hover,
+.secret-toggle:focus-visible {
+  color: var(--foreground);
+}
+
 /* Typography */
 h1 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; }
 h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }

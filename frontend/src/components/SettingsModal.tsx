@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Save, X, Download, Upload } from 'lucide-react';
+import { Save, X, Download, Upload, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchConfig, type AppConfig } from '@/lib/api';
 import { localizeFlightPlace, useLanguage } from '@/lib/i18n';
@@ -100,6 +100,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
   const [initial] = useState(loadSettings);
 
   const [serpapiKey, setSerpapiKey] = useState(initial.serpapiKey ?? '');
+  const [showKey, setShowKey] = useState(false);
   const [trainScoring, setTrainScoring] = useState(() => asStrings({ ...DEFAULT_TRAIN_SCORING, ...initial.trains?.scoring }));
   const [flightScoring, setFlightScoring] = useState(() => asStrings({ ...DEFAULT_FLIGHT_SCORING, ...initial.flights?.scoring }));
   const [reminders, setReminders] = useState<ReminderRow[]>(() =>
@@ -329,14 +330,31 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="form-group" style={{ marginBottom: '32px' }}>
-          <label className="form-label">{t("serpapi_label")}</label>
-          <input
-            type="password"
-            autoComplete="off"
-            value={serpapiKey}
-            onChange={e => setSerpapiKey(e.target.value)}
-            placeholder={t("serpapi_placeholder")}
-          />
+          <label className="form-label" htmlFor="serpapi-key">{t("serpapi_label")}</label>
+          <div className="secret-field">
+            {/* Shown as text, the key must not be autocorrected or capitalized by a phone keyboard. */}
+            <input
+              id="serpapi-key"
+              type={showKey ? 'text' : 'password'}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              value={serpapiKey}
+              onChange={e => setSerpapiKey(e.target.value)}
+              placeholder={t("serpapi_placeholder")}
+            />
+            <button
+              type="button"
+              className="secret-toggle"
+              onClick={() => setShowKey(shown => !shown)}
+              aria-controls="serpapi-key"
+              aria-label={showKey ? t("hide_key") : t("show_key")}
+              title={showKey ? t("hide_key") : t("show_key")}
+            >
+              {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px' }}>
