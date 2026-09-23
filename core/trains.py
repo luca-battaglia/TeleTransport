@@ -104,7 +104,6 @@ class SearchTask:
 
 @dataclass
 class RankedSolution:
-    route_label: str
     origin: str
     destination: str
     dep: datetime
@@ -513,7 +512,6 @@ async def search_ranked_solutions(
                         continue
 
                     found.append(RankedSolution(
-                        route_label=task.route.label,
                         origin=task.route.from_name,
                         destination=task.route.to_name,
                         dep=dep_local,

@@ -7,26 +7,21 @@ import copy
 import logging
 import os
 import re
-import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, NoReturn, Optional
 
 import httpx
-from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import ValidationError
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-load_dotenv(ROOT / ".env")
-
-from backend.limits import UsageLimits  # noqa: E402
-from backend.schemas import ConfigOverrides, SearchRequest  # noqa: E402
-from core import flights, trains  # noqa: E402
-from core.cache import app_cache  # noqa: E402
-from core.config import CONFIG_ENV_VAR, CONFIG_FILENAME, deep_get, load_config_dict, merge_overrides  # noqa: E402
-from core.search import (  # noqa: E402
+from backend.limits import UsageLimits
+from backend.schemas import ConfigOverrides, SearchRequest
+from core import flights, trains
+from core.cache import app_cache
+from core.config import CONFIG_ENV_VAR, CONFIG_FILENAME, deep_get, load_config_dict, merge_overrides
+from core.search import (
     Row,
     SearchQuery,
     count_days,
@@ -35,6 +30,8 @@ from core.search import (  # noqa: E402
     search_flights,
     search_trains,
 )
+
+ROOT = Path(__file__).resolve().parent.parent
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 # httpx logs every request URL at INFO, and SerpApi takes the API key in the query string.
@@ -47,19 +44,21 @@ def _env_int(name: str, default: int) -> int:
 
 
 # A search may cover several disjoint stretches of days, and every day costs one
-# upstream lookup per route, so the total is capped.
+# upstream lookup per route, so both the days and the route-days are capped: one
+# search costs at most 30 SerpApi searches (12% of the free plan), or 30
+# route-days of Trenitalia pages from this server's address.
 MAX_SEARCH_DAYS = 14
+MAX_ROUTE_DAYS = 30
 
 # Each train search drives a headless browser; this bounds how many run at once.
 MAX_CONCURRENT_TRAIN_SEARCHES = _env_int("MAX_CONCURRENT_TRAIN_SEARCHES", 2)
 QUEUE_TIMEOUT_S = 60
 
 # Visitors without their own SerpApi key share SERPAPI_DEMO_KEY. Demo searches are
-# kept small (one route, a few days, fewer round-trip candidates) and the daily
-# call budget is sized under the free plan, so the key can never be drained.
+# kept small (one route, a few days) and the daily call budget is sized under the
+# free plan, so the key can never be drained.
 DEMO_KEY = os.getenv("SERPAPI_DEMO_KEY", "").strip()
 DEMO_MAX_CALLS_PER_SEARCH = 3
-DEMO_TOP_OUTBOUNDS = 2
 
 SERPAPI_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 
@@ -108,17 +107,23 @@ def config_for(x_config: Optional[str]) -> Dict[str, Any]:
 
 
 def build_query(req: SearchRequest) -> SearchQuery:
-    ret_ranges = [] if req.one_way else [(r.start, r.end) for r in req.ret_ranges]
-    query = SearchQuery.create(
-        req.origins,
-        req.destinations,
-        [(r.start, r.end) for r in req.dep_ranges],
-        ret_ranges,
-        lang=req.lang,
-    )
-    for spans in (query.dep_ranges, query.ret_ranges):
-        if count_days(spans) > MAX_SEARCH_DAYS:
-            fail(400, "too_many_days", f"A search may cover at most {MAX_SEARCH_DAYS} days.", days=MAX_SEARCH_DAYS)
+    query = SearchQuery.create(req.origins, req.destinations, [(r.start, r.end) for r in req.dep_ranges], lang=req.lang)
+
+    # "Today" differs across time zones, so yesterday (UTC) still passes: the
+    # visitor's own today is never rejected, wherever they are.
+    earliest = datetime.now(timezone.utc).date() - timedelta(days=1)
+    if query.dep_ranges[0][0] < earliest:
+        fail(400, "past_dates", "Dates in the past cannot be searched.")
+    if count_days(query.dep_ranges) > MAX_SEARCH_DAYS:
+        fail(400, "too_many_days", f"A search may cover at most {MAX_SEARCH_DAYS} days.", days=MAX_SEARCH_DAYS)
+    if query.route_days > MAX_ROUTE_DAYS:
+        fail(
+            400,
+            "too_many_route_days",
+            f"A search may cover at most {MAX_ROUTE_DAYS} route-days (origins x destinations x days).",
+            max=MAX_ROUTE_DAYS,
+            route_days=query.route_days,
+        )
     return query
 
 
@@ -216,10 +221,10 @@ async def demo_flight_search(query: SearchQuery, cfg: Dict[str, Any], client: st
     if len(query.origins) != 1 or len(query.destinations) != 1:
         fail(400, "demo_single_route", "Demo searches cover a single origin and destination.")
 
-    cfg = merge_overrides(cfg, {"flights": {"top_outbounds": DEMO_TOP_OUTBOUNDS}})
     estimate = estimate_flight_calls(query, cfg)
     if estimate > DEMO_MAX_CALLS_PER_SEARCH:
-        fail(400, "demo_search_too_large", "Demo searches cover up to 3 days one-way, or one outbound and one return day.")
+        limit = DEMO_MAX_CALLS_PER_SEARCH
+        fail(400, "demo_search_too_large", f"Demo searches cover up to {limit} days.", days=limit)
 
     reservation = limits.reserve_demo(client, estimate)
     if reservation is None:

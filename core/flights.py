@@ -28,9 +28,6 @@ GOOGLE_FLIGHTS_URL = "https://www.google.com/travel/flights"
 
 AIRPORT_LIST = re.compile(r"[A-Z]{3}(,[A-Z]{3})*", re.IGNORECASE)
 
-DateSpan = Tuple[date, date]
-
-
 class SerpApiError(RuntimeError):
     """An error reported by SerpApi. Messages never contain the API key."""
 
@@ -61,8 +58,6 @@ class FlightsDefaultsConfig:
     dedup: bool = True
 
     min_price: int = 3
-    top_outbounds: int = 10
-    top_returns: int = 20
     top_flights: int = 80
 
 
@@ -73,17 +68,9 @@ def parse_flights_config(cfg: Mapping[str, Any]) -> Tuple[FlightsDefaultsConfig,
     return defaults, scoring
 
 
-def build_booking_url(
-    origin: str,
-    destination: str,
-    out_dep: datetime,
-    in_dep: Optional[datetime] = None,
-    *,
-    lang: str = "it",
-) -> str:
+def build_booking_url(origin: str, destination: str, dep: datetime, *, lang: str = "it") -> str:
     """Link to the Google Flights results for the day and route of a ranked row."""
-    query = f"Flights to {destination} from {origin} on {out_dep.date().isoformat()}"
-    query += f" through {in_dep.date().isoformat()}" if in_dep else " one-way"
+    query = f"Flights to {destination} from {origin} on {dep.date().isoformat()} one-way"
     return f"{GOOGLE_FLIGHTS_URL}?{urlencode({'q': query, 'hl': lang})}"
 
 
@@ -161,8 +148,8 @@ def late_arrival_penalty(arr: datetime, scoring: FlightsScoringConfig) -> float:
     return 0.0
 
 
-def time_value_cost(total_duration_min: int, scoring: FlightsScoringConfig) -> float:
-    return (total_duration_min / 60.0) * float(scoring.time_value_eur_per_hour)
+def time_value_cost(duration_min: int, scoring: FlightsScoringConfig) -> float:
+    return (duration_min / 60.0) * float(scoring.time_value_eur_per_hour)
 
 
 def connections_count(item: Dict[str, Any]) -> int:
@@ -176,7 +163,7 @@ def connections_count(item: Dict[str, Any]) -> int:
 
 
 def airport_transfer_cost(scoring: FlightsScoringConfig, airports: Iterable[str]) -> float:
-    """Ground cost of getting to or from each airport a trip uses, once per use."""
+    """Ground cost of getting to and from the airports a flight uses."""
     total = 0.0
     for iata in airports:
         extras = scoring.airport_extras.get(iata)
@@ -326,11 +313,10 @@ def select_top_items(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, 
 class RankedRow:
     origin: str
     destination: str
-    out_dep: datetime
-    out_arr: datetime
-    in_dep: Optional[datetime]
-    in_arr: Optional[datetime]
-    total_duration_min: int
+    dep: datetime
+    arr: datetime
+    duration_min: int
+    changes: int
     price_eur: int
     adjusted_cost: float
 
@@ -339,7 +325,7 @@ def dedup_rows(rows: List[RankedRow]) -> List[RankedRow]:
     seen = set()
     out: List[RankedRow] = []
     for r in rows:
-        key = (r.origin, r.destination, r.out_dep, r.out_arr, r.in_dep, r.in_arr, r.total_duration_min, r.price_eur)
+        key = (r.origin, r.destination, r.dep, r.arr, r.duration_min, r.price_eur)
         if key not in seen:
             seen.add(key)
             out.append(r)
@@ -361,13 +347,14 @@ async def gather_rows(jobs: Iterable[Awaitable[List[RankedRow]]]) -> List[Ranked
     return [row for r in results if not isinstance(r, BaseException) for row in r]
 
 
-def _base_params(api_key: str, origin: str, destination: str, dep_day: date, defaults: FlightsDefaultsConfig) -> Dict[str, Any]:
+def _search_params(api_key: str, origin: str, destination: str, day: date, defaults: FlightsDefaultsConfig) -> Dict[str, Any]:
     params: Dict[str, Any] = {
         "engine": "google_flights",
         "api_key": api_key,
+        "type": "2",
         "departure_id": origin,
         "arrival_id": destination,
-        "outbound_date": dep_day.isoformat(),
+        "outbound_date": day.isoformat(),
         "currency": defaults.currency,
         "hl": defaults.hl,
         "gl": defaults.gl,
@@ -383,150 +370,42 @@ def _base_params(api_key: str, origin: str, destination: str, dep_day: date, def
     return params
 
 
-async def build_oneway_rows(
+async def search_day(
     client: httpx.AsyncClient,
     api_key: str,
     origin: str,
     destination: str,
-    dep_span: DateSpan,
+    day: date,
     defaults: FlightsDefaultsConfig,
     scoring: FlightsScoringConfig,
 ) -> List[RankedRow]:
+    """Rank the one-way flights of one route on one day, which costs one SerpApi search."""
+    resp = await serpapi_get_async(client, _search_params(api_key, origin, destination, day, defaults))
 
-    async def fetch_day(dep_day: date) -> List[RankedRow]:
-        params = _base_params(api_key, origin, destination, dep_day, defaults)
-        params["type"] = "2"
-        resp = await serpapi_get_async(client, params)
+    rows: List[RankedRow] = []
+    for item in select_top_items(flights_list(resp), defaults.top_flights):
+        price = get_price(item)
+        if price is None or price < defaults.min_price:
+            continue
+        try:
+            dep, arr = first_last_times(item, day)
+        except ValueError:
+            continue
 
-        rows: List[RankedRow] = []
-        for item in select_top_items(flights_list(resp), defaults.top_flights):
-            price = get_price(item)
-            if price is None or price < defaults.min_price:
-                continue
-            try:
-                dep, arr = first_last_times(item, dep_day)
-            except ValueError:
-                continue
-
-            dur = get_total_duration(item)
-            dep_airport, arr_airport = end_airports(item, origin, destination)
-            adjusted = (
-                float(price)
-                + time_value_cost(dur, scoring)
-                + early_departure_penalty(dep, scoring)
-                + late_arrival_penalty(arr, scoring)
-                + connections_count(item) * float(scoring.connection_penalty_eur)
-                + airport_transfer_cost(scoring, (dep_airport, arr_airport))
-            )
-            rows.append(RankedRow(dep_airport, arr_airport, dep, arr, None, None, dur, price, adjusted))
-        return rows
-
-    return await gather_rows(fetch_day(d) for d in daterange(*dep_span))
-
-
-async def build_roundtrip_rows(
-    client: httpx.AsyncClient,
-    api_key: str,
-    origin: str,
-    destination: str,
-    dep_span: DateSpan,
-    ret_span: DateSpan,
-    defaults: FlightsDefaultsConfig,
-    scoring: FlightsScoringConfig,
-) -> List[RankedRow]:
-    """Rank round trips: one lookup for the outbounds of a date pair, one per outbound for its returns.
-
-    The price on a return option is SerpApi's total for the whole round trip,
-    which is why it is the one used.
-    """
-
-    async def fetch_pair(dep_day: date, ret_day: date) -> List[RankedRow]:
-        base = _base_params(api_key, origin, destination, dep_day, defaults)
-        base.update({"type": "1", "return_date": ret_day.isoformat()})
-        resp_out = await serpapi_get_async(client, base)
-
-        outbounds = [it for it in flights_list(resp_out) if it.get("departure_token")]
-        rows: List[RankedRow] = []
-        for out_item in select_top_items(outbounds, defaults.top_outbounds):
-            try:
-                out_dep, out_arr = first_last_times(out_item, dep_day)
-            except ValueError:
-                continue
-            out_dur = get_total_duration(out_item)
-            out_conns = connections_count(out_item)
-            out_from, out_to = end_airports(out_item, origin, destination)
-
-            try:
-                resp_ret = await serpapi_get_async(client, {**base, "departure_token": out_item["departure_token"]})
-            except SerpApiError as exc:
-                log.warning("return lookup failed %s->%s: %s", origin, destination, exc)
-                continue
-
-            for ret_item in select_top_items(flights_list(resp_ret), defaults.top_returns):
-                price = get_price(ret_item)
-                if price is None or price < defaults.min_price:
-                    continue
-                try:
-                    in_dep, in_arr = first_last_times(ret_item, ret_day)
-                except ValueError:
-                    continue
-
-                total_dur = out_dur + get_total_duration(ret_item)
-                ret_from, ret_to = end_airports(ret_item, destination, origin)
-                adjusted = (
-                    float(price)
-                    + time_value_cost(total_dur, scoring)
-                    + early_departure_penalty(out_dep, scoring)
-                    + early_departure_penalty(in_dep, scoring)
-                    + late_arrival_penalty(out_arr, scoring)
-                    + late_arrival_penalty(in_arr, scoring)
-                    + (out_conns + connections_count(ret_item)) * float(scoring.connection_penalty_eur)
-                    + airport_transfer_cost(scoring, (out_from, out_to, ret_from, ret_to))
-                )
-                rows.append(RankedRow(out_from, out_to, out_dep, out_arr, in_dep, in_arr, total_dur, price, adjusted))
-        return rows
-
-    pairs = [(d, r) for d in daterange(*dep_span) for r in daterange(*ret_span) if r > d]
-    return await gather_rows(fetch_pair(d, r) for d, r in pairs)
+        duration = get_total_duration(item)
+        changes = connections_count(item)
+        dep_airport, arr_airport = end_airports(item, origin, destination)
+        adjusted = (
+            float(price)
+            + time_value_cost(duration, scoring)
+            + early_departure_penalty(dep, scoring)
+            + late_arrival_penalty(arr, scoring)
+            + changes * float(scoring.connection_penalty_eur)
+            + airport_transfer_cost(scoring, (dep_airport, arr_airport))
+        )
+        rows.append(RankedRow(dep_airport, arr_airport, dep, arr, duration, changes, price, adjusted))
+    return rows
 
 
 def expand_pairs(origins: Sequence[str], destinations: Sequence[str]) -> List[Tuple[str, str]]:
     return [(o, d) for o in origins for d in destinations if o and d and o != d]
-
-
-def estimate_calls(
-    origins: Sequence[str],
-    destinations: Sequence[str],
-    dep_days: Sequence[date],
-    ret_days: Sequence[date],
-    defaults: FlightsDefaultsConfig,
-) -> int:
-    """Upper bound on the SerpApi searches a query triggers, before caching."""
-    pairs = len(expand_pairs(origins, destinations))
-    if not ret_days:
-        return pairs * len(dep_days)
-    date_pairs = sum(1 for d in dep_days for r in ret_days if r > d)
-    return pairs * date_pairs * (1 + defaults.top_outbounds)
-
-
-async def build_rows_multi(
-    client: httpx.AsyncClient,
-    api_key: str,
-    origins: Sequence[str],
-    destinations: Sequence[str],
-    dep_span: DateSpan,
-    ret_span: Optional[DateSpan],
-    defaults: FlightsDefaultsConfig,
-    scoring: FlightsScoringConfig,
-) -> List[RankedRow]:
-    """Rank every origin/destination pair over one outbound span (and one return span)."""
-    jobs = []
-    for o, d in expand_pairs(origins, destinations):
-        if ret_span is None:
-            jobs.append(build_oneway_rows(client, api_key, o, d, dep_span, defaults, scoring))
-        else:
-            jobs.append(build_roundtrip_rows(client, api_key, o, d, dep_span, ret_span, defaults, scoring))
-
-    rows = await gather_rows(jobs)
-    rows.sort(key=lambda x: (x.adjusted_cost, x.total_duration_min))
-    return rows

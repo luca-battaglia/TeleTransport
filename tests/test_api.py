@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date, timedelta
 
 import diskcache
 import httpx
@@ -9,13 +10,13 @@ from fastapi.testclient import TestClient
 import backend.main as api
 from backend.limits import UsageLimits
 
-SEARCH = {
-    "origins": ["Zurich"],
-    "destinations": ["Rome"],
-    "dep_ranges": [{"start": "2026-10-08", "end": "2026-10-08"}],
-    "one_way": True,
-    "lang": "en",
-}
+
+def days(from_now: int, count: int = 1) -> list:
+    first = date.today() + timedelta(days=from_now)
+    return [{"start": str(first), "end": str(first + timedelta(days=count - 1))}]
+
+
+SEARCH = {"origins": ["Zurich"], "destinations": ["Rome"], "dep_ranges": days(7), "lang": "en"}
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ def fake_flight_search(calls: int):
     async def search(query, cfg, api_key, *, client=None):
         for _ in range(calls):
             await client.send(httpx.Request("GET", "https://serpapi.test/search.json"))
-        return [{"price_eur": 99, "top_outbounds": cfg["flights"]["top_outbounds"]}]
+        return [{"price_eur": 99}]
     return search
 
 
@@ -81,10 +82,27 @@ def test_user_airport_extras_replace_the_server_ones(client, monkeypatch):
 
 
 def test_search_window_is_capped(client):
-    body = {**SEARCH, "dep_ranges": [{"start": "2026-10-01", "end": "2026-10-20"}]}
+    body = {**SEARCH, "dep_ranges": days(7, count=20)}
     response = client.post("/api/trains", json=body)
     assert response.status_code == 400
     assert response.json()["detail"] == {"code": "too_many_days", "message": "A search may cover at most 14 days.", "days": 14}
+
+
+def test_every_route_counts_against_the_route_day_cap(client):
+    body = {**SEARCH, "origins": ["Zurich", "Basel", "Geneva"], "dep_ranges": days(7, count=11)}
+    detail = client.post("/api/trains", json=body).json()["detail"]
+    assert (detail["code"], detail["route_days"], detail["max"]) == ("too_many_route_days", 33, 30)
+
+
+def test_past_dates_are_rejected_but_yesterday_is_not(client, monkeypatch):
+    async def no_trains(query, cfg):
+        return []
+
+    monkeypatch.setattr(api, "search_trains", no_trains)
+    past = client.post("/api/trains", json={**SEARCH, "dep_ranges": days(-3, count=5)})
+    assert past.json()["detail"]["code"] == "past_dates"
+    # Yesterday in UTC is still today somewhere west of here.
+    assert client.post("/api/trains", json={**SEARCH, "dep_ranges": days(-1)}).status_code == 200
 
 
 def test_flights_need_a_key_when_the_demo_is_off(client):
@@ -99,11 +117,9 @@ def test_demo_search_is_limited_and_charged_by_real_calls(client, monkeypatch, o
 
     response = client.post("/api/flights", json=SEARCH)
     assert response.status_code == 200
-    body = response.json()
-    assert body["data"][0]["top_outbounds"] == api.DEMO_TOP_OUTBOUNDS
-    assert body["demo"] == {"searches_left": 1}
+    assert response.json()["demo"] == {"searches_left": 1}
 
-    too_wide = {**SEARCH, "dep_ranges": [{"start": "2026-10-08", "end": "2026-10-11"}]}
+    too_wide = {**SEARCH, "dep_ranges": days(7, count=4)}
     assert client.post("/api/flights", json=too_wide).json()["detail"]["code"] == "demo_search_too_large"
 
     two_routes = {**SEARCH, "destinations": ["Rome", "Naples"]}

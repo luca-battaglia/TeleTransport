@@ -52,12 +52,9 @@ no_cache = false          # true = always ask SerpApi, ignoring its cache
 dedup = true              # drop rows identical in times, duration and price
 
 min_price = 3             # EUR: ignore prices below this, usually parsing noise
-top_outbounds = 10        # round trip: outbound candidates per date pair (one SerpApi call each)
-top_returns = 20          # round trip: returns kept per outbound
-top_flights = 80          # one-way: flights kept per day
+top_flights = 80          # flights kept per route and day
 
-# Same shape as trains, with connections in place of changes. Round trips add
-# the penalties of both legs; the price is the round-trip total.
+# Same shape as trains, with connections in place of changes.
 [flights.scoring]
 time_value_eur_per_hour = 20.0
 early_departure_ref_hour = 9
@@ -68,8 +65,8 @@ late_arrival_penalty_eur_per_hour = 15.0
 connection_penalty_eur = 5.0
 companions_time_value_eur_per_hour = 8.0
 
-# Cost of getting to and from an airport, added once per use of the airport
-# (twice on a round trip). Drive hours are priced at the time values above.
+# Cost of getting to or from an airport, added to every flight that uses it.
+# Drive hours are priced at the time values above.
 [flights.airport_extras]
 # BDS = { fuel_eur = 30.0, personal_drive_hours = 1.5, companions_drive_hours = 3.0 }
 

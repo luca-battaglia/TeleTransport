@@ -53,7 +53,7 @@ def test_flight_late_arrival_wraps_past_midnight():
     assert late_arrival_penalty(datetime(2026, 10, 3, 12, 0), scoring) == 0
 
 
-def test_airport_extras_apply_once_per_use_of_the_airport():
+def test_airport_extras_price_fuel_and_both_drives():
     scoring = FlightsScoringConfig(
         time_value_eur_per_hour=20,
         companions_time_value_eur_per_hour=8,
@@ -61,7 +61,6 @@ def test_airport_extras_apply_once_per_use_of_the_airport():
     )
     one_leg = 30 + 1.5 * 20 + 3 * 8
     assert airport_transfer_cost(scoring, ["ZRH", "BDS"]) == pytest.approx(one_leg)
-    assert airport_transfer_cost(scoring, ["ZRH", "BDS", "BDS", "ZRH"]) == pytest.approx(2 * one_leg)
     assert airport_transfer_cost(scoring, ["ZRH", "BRI"]) == 0
 
 

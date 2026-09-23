@@ -13,7 +13,6 @@ __pycache__/
 
 # Upstream response cache and rate-limit counters
 .cache/
-backend/backend_cache/
 
 # Editors and OS
 .vscode/

@@ -5,7 +5,14 @@ import httpx
 import pytest
 
 from core.flights import SerpApiError
-from core.search import SearchQuery, count_days, estimate_flight_calls, normalize_ranges, search_flights
+from core.search import (
+    MAX_CONCURRENT_FLIGHT_LOOKUPS,
+    SearchQuery,
+    count_days,
+    estimate_flight_calls,
+    normalize_ranges,
+    search_flights,
+)
 
 NO_CACHE = {"flights": {"no_cache": True, "deep_search": False}}
 API_KEY = "k" * 64
@@ -28,20 +35,17 @@ def test_reversed_range_is_straightened():
 def test_query_drops_blank_places():
     query = SearchQuery.create(["Zurich", " ", ""], ["Rome"], [(d(1), d(1))])
     assert query.origins == ("Zurich",)
-    assert query.one_way
+    assert query.route_days == 1
 
 
-def flight(dep: str, arr: str, minutes: int, price: int, token: str = "", route: tuple = ()) -> dict:
+def flight(dep: str, arr: str, minutes: int, price: int, route: tuple = ()) -> dict:
     departure = {"time": dep, **({"id": route[0]} if route else {})}
     arrival = {"time": arr, **({"id": route[1]} if route else {})}
-    item = {
+    return {
         "flights": [{"departure_airport": departure, "arrival_airport": arrival, "duration": minutes}],
         "total_duration": minutes,
         "price": price,
     }
-    if token:
-        item["departure_token"] = token
-    return item
 
 
 def serpapi(handler) -> httpx.AsyncClient:
@@ -52,7 +56,7 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def test_one_way_rows_are_ranked_by_adjusted_cost_not_price():
+def test_rows_are_ranked_by_adjusted_cost_not_price():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={
             "search_metadata": {"status": "Success"},
@@ -64,7 +68,10 @@ def test_one_way_rows_are_ranked_by_adjusted_cost_not_price():
     rows = run(search_flights(query, NO_CACHE, API_KEY, client=serpapi(handler)))
     # The 05:00 flight is 20 EUR cheaper but four hours before 09:00 costs 80.
     assert [r["price_eur"] for r in rows] == [70, 50]
-    assert rows[0]["booking_url"].startswith("https://www.google.com/travel/flights?")
+    best = rows[0]
+    assert (best["dep"], best["arr"]) == ("2026-10-08T11:00:00", "2026-10-08T12:30:00")
+    assert (best["duration_min"], best["changes"]) == (90, 0)
+    assert best["booking_url"].startswith("https://www.google.com/travel/flights?")
 
 
 def test_a_city_is_searched_on_all_its_airports_and_rows_name_the_one_used():
@@ -86,27 +93,20 @@ def test_a_city_is_searched_on_all_its_airports_and_rows_name_the_one_used():
     assert rows[0]["adjusted_cost"] == pytest.approx(80 + 1.5 * 20 + 25)
 
 
-def test_round_trip_uses_the_total_price_from_the_return_leg():
-    seen_tokens = []
+def test_flight_lookups_run_a_few_at_a_time():
+    in_flight = peak = 0
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        token = request.url.params.get("departure_token")
-        if token:
-            seen_tokens.append(token)
-            return httpx.Response(200, json={
-                "search_metadata": {"status": "Success"},
-                "best_flights": [flight("2026-10-12 18:00", "2026-10-12 19:30", 90, 210)],
-            })
-        return httpx.Response(200, json={
-            "search_metadata": {"status": "Success"},
-            "best_flights": [flight("2026-10-08 10:00", "2026-10-08 11:30", 90, 99, token="out-1")],
-        })
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return httpx.Response(200, json={"search_metadata": {"status": "Success"}})
 
-    query = SearchQuery.create(["ZRH"], ["FCO"], [(d(8), d(8))], [(d(12), d(12))])
-    rows = run(search_flights(query, NO_CACHE, API_KEY, client=serpapi(handler)))
-    assert seen_tokens == ["out-1"]
-    assert rows[0]["price_eur"] == 210
-    assert rows[0]["in_dep"] == "2026-10-12T18:00:00"
+    query = SearchQuery.create(["ZRH"], ["FCO", "NAP"], [(d(1), d(7))])
+    run(search_flights(query, NO_CACHE, API_KEY, client=serpapi(handler)))
+    assert peak == MAX_CONCURRENT_FLIGHT_LOOKUPS
 
 
 def test_an_empty_day_is_not_an_error():
@@ -131,10 +131,8 @@ def test_when_every_lookup_fails_the_error_surfaces_without_the_key():
     assert "***" in str(info.value)
 
 
-def test_call_estimate_matches_the_request_pattern():
-    cfg = {"flights": {"top_outbounds": 2}}
-    one_way = SearchQuery.create(["Zurich"], ["Rome"], [(d(1), d(3))])
-    assert estimate_flight_calls(one_way, cfg) == 3
-    # Only return days after the outbound day form a pair.
-    round_trip = SearchQuery.create(["Zurich"], ["Rome"], [(d(1), d(2))], [(d(2), d(3))])
-    assert estimate_flight_calls(round_trip, cfg) == 3 * (1 + 2)
+def test_call_estimate_is_one_search_per_route_and_day():
+    assert estimate_flight_calls(SearchQuery.create(["Zurich"], ["Rome"], [(d(1), d(3))]), {}) == 3
+    # Rome to Rome is no route, so it costs nothing.
+    query = SearchQuery.create(["Zurich", "Rome"], ["Rome", "Naples"], [(d(1), d(2)), (d(5), d(5))])
+    assert estimate_flight_calls(query, {}) == 3 * 3

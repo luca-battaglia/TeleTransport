@@ -26,8 +26,6 @@ class SearchRequest(BaseModel):
     origins: List[Place] = Field(min_length=1, max_length=MAX_ENDPOINTS)
     destinations: List[Place] = Field(min_length=1, max_length=MAX_ENDPOINTS)
     dep_ranges: List[DateRange] = Field(min_length=1, max_length=14)
-    ret_ranges: List[DateRange] = Field(default_factory=list, max_length=14)
-    one_way: bool = False
     lang: Literal["it", "en"] = "it"
 
 

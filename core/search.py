@@ -1,13 +1,15 @@
 """Search orchestration shared by the HTTP API and the CLI.
 
 Both front ends build a SearchQuery and get back the same serialized rows, so the
-web app and the terminal always search and rank identically.
+web app and the terminal always search and rank identically. Every search is
+one-way: the way back is another search, with origin and destination swapped.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import httpx
@@ -17,6 +19,10 @@ from core.config import deep_get
 
 DateSpan = Tuple[date, date]
 Row = Dict[str, Any]
+
+# SerpApi answers a burst of parallel searches with 429s, so a flight search
+# fetches its route-days a few at a time.
+MAX_CONCURRENT_FLIGHT_LOOKUPS = 4
 
 # Substring rules from place names to IATA codes, tried in order: specific
 # airports ("linate") before the city that contains them ("milan").
@@ -73,7 +79,6 @@ class SearchQuery:
     origins: Tuple[str, ...]
     destinations: Tuple[str, ...]
     dep_ranges: Tuple[DateSpan, ...]
-    ret_ranges: Tuple[DateSpan, ...] = ()
     # Language of the booking links, so they open in the language the user reads.
     lang: str = "it"
 
@@ -83,48 +88,61 @@ class SearchQuery:
         origins: Sequence[str],
         destinations: Sequence[str],
         dep_ranges: Iterable[DateSpan],
-        ret_ranges: Iterable[DateSpan] = (),
         lang: str = "it",
     ) -> "SearchQuery":
         return cls(
             origins=tuple(o.strip() for o in origins if o and o.strip()),
             destinations=tuple(d.strip() for d in destinations if d and d.strip()),
             dep_ranges=tuple(normalize_ranges(dep_ranges)),
-            ret_ranges=tuple(normalize_ranges(ret_ranges)),
             lang=lang,
         )
 
     @property
-    def one_way(self) -> bool:
-        return not self.ret_ranges
+    def route_days(self) -> int:
+        """Every origin paired with every destination on every day: one upstream lookup each."""
+        return len(self.origins) * len(self.destinations) * count_days(self.dep_ranges)
+
+
+def _row(
+    origin: str,
+    destination: str,
+    dep: datetime,
+    arr: datetime,
+    duration_min: int,
+    changes: int,
+    price_eur: float,
+    adjusted_cost: float,
+    booking_url: str,
+) -> Row:
+    """The shape of a ranked solution, the same for trains and flights."""
+    return {
+        "origin": origin,
+        "destination": destination,
+        "dep": dep.isoformat(),
+        "arr": arr.isoformat(),
+        "duration_min": duration_min,
+        "changes": changes,
+        "price_eur": price_eur,
+        "adjusted_cost": round(adjusted_cost, 2),
+        "booking_url": booking_url,
+    }
 
 
 async def search_trains(query: SearchQuery, cfg: Mapping[str, Any]) -> List[Row]:
-    """Rank train solutions. Return journeys are searched as their own routes and ranked alongside."""
     defaults, scoring = trains.parse_trains_config(cfg)
-
-    tasks: List[trains.SearchTask] = []
-    for origin in query.origins:
-        for destination in query.destinations:
-            outbound = trains.Route(origin, destination)
-            tasks += [trains.SearchTask(outbound, d1, d2) for d1, d2 in query.dep_ranges]
-            back = trains.Route(destination, origin)
-            tasks += [trains.SearchTask(back, d1, d2) for d1, d2 in query.ret_ranges]
+    tasks = [
+        trains.SearchTask(trains.Route(origin, destination), d1, d2)
+        for origin in query.origins
+        for destination in query.destinations
+        for d1, d2 in query.dep_ranges
+    ]
 
     ranked = await trains.search_ranked_solutions(tasks, defaults, scoring)
     return [
-        {
-            "route": r.route_label,
-            "origin": r.origin,
-            "destination": r.destination,
-            "dep": r.dep.isoformat(),
-            "arr": r.arr.isoformat(),
-            "duration_min": int(r.duration.total_seconds() // 60),
-            "changes": r.changes,
-            "price_eur": r.price_eur,
-            "adjusted_cost": round(r.adjusted_cost, 2),
-            "booking_url": trains.build_booking_url(r.origin, r.destination, r.dep, lang=query.lang),
-        }
+        _row(
+            r.origin, r.destination, r.dep, r.arr, int(r.duration.total_seconds() // 60), r.changes,
+            r.price_eur, r.adjusted_cost, trains.build_booking_url(r.origin, r.destination, r.dep, lang=query.lang),
+        )
         for r in ranked
     ]
 
@@ -143,9 +161,9 @@ def flight_endpoints(query: SearchQuery, cfg: Mapping[str, Any]) -> Tuple[List[s
 
 
 def estimate_flight_calls(query: SearchQuery, cfg: Mapping[str, Any]) -> int:
-    defaults, _ = flights.parse_flights_config(cfg)
+    """SerpApi searches a query costs at most, before caching: one per route and day."""
     origins, destinations = flight_endpoints(query, cfg)
-    return flights.estimate_calls(origins, destinations, days_of(query.dep_ranges), days_of(query.ret_ranges), defaults)
+    return len(flights.expand_pairs(origins, destinations)) * count_days(query.dep_ranges)
 
 
 async def search_flights(
@@ -155,18 +173,23 @@ async def search_flights(
     *,
     client: Optional[httpx.AsyncClient] = None,
 ) -> List[Row]:
-    """Rank flights. Each outbound span is paired with each return span, then everything is re-ranked."""
+    """Rank the flights of every route and day together."""
     defaults, scoring = flights.parse_flights_config(cfg)
     origins, destinations = flight_endpoints(query, cfg)
-    ret_spans: List[Optional[DateSpan]] = list(query.ret_ranges) or [None]
+    slots = asyncio.Semaphore(MAX_CONCURRENT_FLIGHT_LOOKUPS)
 
     owns_client = client is None
     http = client or httpx.AsyncClient(timeout=120)
+
+    async def lookup(origin: str, destination: str, day: date) -> List[flights.RankedRow]:
+        async with slots:
+            return await flights.search_day(http, api_key, origin, destination, day, defaults, scoring)
+
     try:
         rows = await flights.gather_rows(
-            flights.build_rows_multi(http, api_key, origins, destinations, dep, ret, defaults, scoring)
-            for dep in query.dep_ranges
-            for ret in ret_spans
+            lookup(o, d, day)
+            for o, d in flights.expand_pairs(origins, destinations)
+            for day in days_of(query.dep_ranges)
         )
     finally:
         if owns_client:
@@ -174,20 +197,12 @@ async def search_flights(
 
     if defaults.dedup:
         rows = flights.dedup_rows(rows)
-    rows.sort(key=lambda r: (r.adjusted_cost, r.total_duration_min))
+    rows.sort(key=lambda r: (r.adjusted_cost, r.duration_min))
 
     return [
-        {
-            "origin": r.origin,
-            "destination": r.destination,
-            "out_dep": r.out_dep.isoformat(),
-            "out_arr": r.out_arr.isoformat(),
-            "in_dep": r.in_dep.isoformat() if r.in_dep else None,
-            "in_arr": r.in_arr.isoformat() if r.in_arr else None,
-            "total_duration_min": r.total_duration_min,
-            "price_eur": r.price_eur,
-            "adjusted_cost": round(r.adjusted_cost, 2),
-            "booking_url": flights.build_booking_url(r.origin, r.destination, r.out_dep, r.in_dep, lang=query.lang),
-        }
+        _row(
+            r.origin, r.destination, r.dep, r.arr, r.duration_min, r.changes,
+            r.price_eur, r.adjusted_cost, flights.build_booking_url(r.origin, r.destination, r.dep, lang=query.lang),
+        )
         for r in rows
     ]

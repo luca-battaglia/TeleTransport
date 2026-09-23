@@ -63,53 +63,40 @@ def parse_span(text: str, today: Optional[date] = None) -> DateSpan:
     return (first, last) if first <= last else (last, first)
 
 
-def _departure(row: Row) -> datetime:
-    return datetime.fromisoformat(row.get("out_dep") or row["dep"])
-
-
-def _duration(row: Row) -> int:
-    return row.get("duration_min", row.get("total_duration_min", 0))
+def _day(row: Row) -> date:
+    return datetime.fromisoformat(row["dep"]).date()
 
 
 def order_rows(rows: Sequence[Row], sort: str, limit: int) -> List[Row]:
     """Best first overall, or grouped by departure day with `limit` rows per day."""
     if sort == "best":
         return list(rows[:limit])
-    by_day = sorted(rows, key=lambda r: (_departure(r).date(), r["adjusted_cost"], _duration(r)))
+    by_day = sorted(rows, key=lambda r: (_day(r), r["adjusted_cost"], r["duration_min"]))
     taken: Dict[date, int] = {}
     out: List[Row] = []
     for row in by_day:
-        day = _departure(row).date()
+        day = _day(row)
         if taken.get(day, 0) < limit:
             taken[day] = taken.get(day, 0) + 1
             out.append(row)
     return out
 
 
-def _fmt_time(value: Optional[str]) -> str:
-    return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M") if value else ""
+def _fmt_time(value: str) -> str:
+    return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M")
 
 
 def _fmt_duration(minutes: int) -> str:
     return f"{minutes // 60}h{minutes % 60:02d}"
 
 
-def render_table(rows: Sequence[Row], mode: str, links: bool) -> str:
-    table: List[List[Any]] = []
-    if mode == "trains":
-        headers = ["Route", "Departure", "Arrival", "Duration", "Changes", "Price (EUR)", "Adj. cost (EUR)"]
-        for r in rows:
-            table.append([r["route"], _fmt_time(r["dep"]), _fmt_time(r["arr"]), _fmt_duration(r["duration_min"]),
-                          r["changes"], r["price_eur"], r["adjusted_cost"]])
-    else:
-        round_trip = any(r["in_dep"] for r in rows)
-        headers = ["Route", "Outbound"] + (["Return"] if round_trip else []) + ["Duration", "Price (EUR)", "Adj. cost (EUR)"]
-        for r in rows:
-            line = [f"{r['origin']} -> {r['destination']}", f"{_fmt_time(r['out_dep'])} -> {_fmt_time(r['out_arr'])[-5:]}"]
-            if round_trip:
-                line.append(f"{_fmt_time(r['in_dep'])} -> {_fmt_time(r['in_arr'])[-5:]}" if r["in_dep"] else "")
-            line += [_fmt_duration(r["total_duration_min"]), r["price_eur"], r["adjusted_cost"]]
-            table.append(line)
+def render_table(rows: Sequence[Row], links: bool) -> str:
+    headers = ["Route", "Departure", "Arrival", "Duration", "Changes", "Price (EUR)", "Adj. cost (EUR)"]
+    table: List[List[Any]] = [
+        [f"{r['origin']} -> {r['destination']}", _fmt_time(r["dep"]), _fmt_time(r["arr"]), _fmt_duration(r["duration_min"]),
+         r["changes"], r["price_eur"], r["adjusted_cost"]]
+        for r in rows
+    ]
     if links:
         headers.append("Link")
         for line, r in zip(table, rows, strict=True):
@@ -133,9 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="origin; repeat the flag for several origins")
     common.add_argument("--to", dest="destinations", action="append", required=True, metavar="PLACE",
                         help="destination; repeat the flag for several destinations")
-    common.add_argument("--dep", action="append", required=True, metavar="DATES", help=f"outbound dates, {DATES_HELP}")
-    common.add_argument("--ret", action="append", default=[], metavar="DATES",
-                        help="return dates, same format; omit for a one-way search")
+    common.add_argument("--dep", action="append", required=True, metavar="DATES", help=f"departure dates, {DATES_HELP}")
     common.add_argument("--sort", choices=("best", "day"), default="best",
                         help="best: ranked overall; day: grouped by departure day (default: best)")
     common.add_argument("--limit", type=int, metavar="N",
@@ -149,7 +134,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="python -m cli",
-        description="Rank trains and flights by what they really cost you, not just the ticket price.",
+        description="Rank one-way trains and flights by what they really cost you, not just the ticket price. "
+                    "For the way back, swap --from and --to.",
     )
     modes = parser.add_subparsers(dest="mode", required=True)
     modes.add_parser("trains", parents=[common], help="Trenitalia trains (station names in Italian)",
@@ -172,13 +158,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         cfg = load_config_dict(args.config)
-        query = SearchQuery.create(
-            args.origins,
-            args.destinations,
-            [parse_span(s) for s in args.dep],
-            [parse_span(s) for s in args.ret],
-            lang=args.lang,
-        )
+        query = SearchQuery.create(args.origins, args.destinations, [parse_span(s) for s in args.dep], lang=args.lang)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -205,7 +185,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
     elif rows:
-        print(render_table(rows, args.mode, args.links))
+        print(render_table(rows, args.links))
     else:
         print("No solutions found.", file=sys.stderr)
     return 0
