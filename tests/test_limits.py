@@ -1,7 +1,7 @@
 import diskcache
 import pytest
 
-from backend.limits import UsageLimits
+from backend.limits import UsageLimits, client_network
 
 
 @pytest.fixture
@@ -89,3 +89,9 @@ def test_the_web_app_proxy_vouches_for_the_visitor_with_the_secret(proxied_limit
 def test_without_a_configured_secret_the_client_ip_header_is_ignored(limits):
     unsigned = request("172.18.0.2", x_forwarded_for="76.76.21.21", x_client_ip="89.160.20.112", x_proxy_secret="")
     assert limits.client_ip(unsigned) == "76.76.21.21"
+
+
+def test_ipv6_clients_are_counted_per_64():
+    assert client_network("2a02:1210:1:2::1") == client_network("2a02:1210:1:2:ffff::9") == "2a02:1210:1:2::/64"
+    assert client_network("2a02:1210:1:3::1") != client_network("2a02:1210:1:2::1")
+    assert client_network("::ffff:81.2.69.160") == client_network("81.2.69.160") == "81.2.69.160"

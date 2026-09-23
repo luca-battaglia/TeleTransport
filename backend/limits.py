@@ -22,6 +22,23 @@ _HOUR_S = 3600
 _COUNTER_TTL_S = 2 * 24 * _HOUR_S
 
 
+def client_network(ip: str) -> str:
+    """What counts as one client: an IPv4 address, or the /64 an IPv6 address sits in.
+
+    An IPv6 host usually gets a whole /64 and can pick a fresh address from it for
+    every request, so counting single addresses would lift every limit.
+    """
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped:
+            return str(address.ipv4_mapped)
+        return str(ipaddress.IPv6Network((address, 64), strict=False))
+    return str(address)
+
+
 @dataclass(frozen=True)
 class DemoReservation:
     day: str
@@ -76,8 +93,8 @@ class UsageLimits:
         return peer or "unknown"
 
     def client_id(self, request: Request) -> str:
-        """A salted hash of the caller's IP address; the raw address is never stored."""
-        return hashlib.sha256(f"{self._salt}:{self.client_ip(request)}".encode()).hexdigest()[:24]
+        """A salted hash of the caller's network; the raw address is never stored."""
+        return hashlib.sha256(f"{self._salt}:{client_network(self.client_ip(request))}".encode()).hexdigest()[:24]
 
     def allow_search(self, client: str) -> bool:
         window = int(time.time() // _HOUR_S)
