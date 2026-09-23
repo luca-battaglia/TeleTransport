@@ -467,17 +467,14 @@ export default function Dashboard() {
   const renderRangePool = (pool: DateRange[], setPool: React.Dispatch<React.SetStateAction<DateRange[]>>) => {
     if (pool.length === 0) return null;
     return (
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+      <div className="range-pool">
         {pool.map(r => (
-          <div
-            key={`${r.start}_${r.end}`}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', padding: '4px 10px', borderRadius: '16px', fontSize: '13px' }}
-          >
+          <div key={`${r.start}_${r.end}`} className="chip">
             <span>{formatRangeLabel(r)}</span>
             <button
               type="button"
+              className="chip-remove"
               onClick={() => setPool(prev => prev.filter(x => !(x.start === r.start && x.end === r.end)))}
-              style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 0, display: 'flex' }}
               title={t("remove")}
             >
               <X size={14} />
@@ -495,10 +492,10 @@ export default function Dashboard() {
     placeholder: string,
     addLabel: string
   ) => (
-    <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div className="endpoint-list">
       {values.map((value, idx) => (
-        <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}>
+        <div key={idx} className="endpoint-row">
+          <div className="endpoint-field">
             <AutocompleteInput
               label={idx === 0 ? label : `${label} ${idx + 1}`}
               value={value}
@@ -508,14 +505,14 @@ export default function Dashboard() {
             />
           </div>
           {values.length > 1 && (
-            <button type="button" className="btn-outline" onClick={() => setValues(values.filter((_, i) => i !== idx))} style={{ padding: '10px', height: '42px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={t("remove")}>
+            <button type="button" className="btn-outline field-btn" onClick={() => setValues(values.filter((_, i) => i !== idx))} title={t("remove")}>
               <X size={18} />
             </button>
           )}
         </div>
       ))}
       {values.length < MAX_ENDPOINTS && (
-        <button type="button" className="btn-outline" onClick={() => setValues([...values, ''])} style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <button type="button" className="btn-outline add-endpoint" onClick={() => setValues([...values, ''])}>
           <Plus size={14} /> {addLabel}
         </button>
       )}
@@ -529,30 +526,27 @@ export default function Dashboard() {
     : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div className="dashboard">
 
-      <div className="flex justify-center" style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'inline-flex', gap: '12px' }}>
-          {(['trains', 'flights'] as const).map(m => (
-            <button
-              key={m}
-              type="button"
-              className={mode === m ? 'btn-primary' : 'btn-outline'}
-              title={`${t(`${m}_btn`)} (Alt+${m === 'trains' ? 1 : 2})`}
-              onClick={() => switchMode(m)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', border: mode === m ? 'none' : '1px solid var(--card-border)', padding: '10px 24px' }}
-            >
-              {m === 'trains' ? <Train size={18} /> : <Plane size={18} />} {t(`${m}_btn`)}
-            </button>
-          ))}
-        </div>
+      <div className="mode-toggle">
+        {(['trains', 'flights'] as const).map(m => (
+          <button
+            key={m}
+            type="button"
+            className={`${mode === m ? 'btn-primary' : 'btn-outline'} with-icon mode-btn`}
+            title={`${t(`${m}_btn`)} (Alt+${m === 'trains' ? 1 : 2})`}
+            onClick={() => switchMode(m)}
+          >
+            {m === 'trains' ? <Train size={18} /> : <Plane size={18} />} {t(`${m}_btn`)}
+          </button>
+        ))}
       </div>
 
       {reminders.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="reminders">
           {reminders.map((r, i) => (
-            <div key={i} style={{ padding: '12px 16px', background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '8px', color: '#ca8a04', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '18px' }}>💡</span>
+            <div key={i} className="reminder">
+              <span className="reminder-icon">💡</span>
               {r.text}
             </div>
           ))}
@@ -564,55 +558,51 @@ export default function Dashboard() {
       <motion.form
         ref={formRef}
         onSubmit={handleSearch}
-        className="glass-panel"
-        style={{ padding: '32px' }}
+        className="glass-panel search-form"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="form-grid">
           {savedSearches[mode].length > 0 && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', gridColumn: '1 / -1' }}>
+            <div className="saved-searches">
               {savedSearches[mode].map((s, i) => (
                 <div
                   key={i}
+                  className="chip saved-chip"
                   onClick={() => { setOrigins(s.origins); setDestinations(s.destinations); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'var(--card-bg)', border: '1px solid var(--card-border)', padding: '6px 12px', borderRadius: '16px', fontSize: '13px', transition: 'all 0.2s' }}
                 >
-                  <span>{s.origins.join(', ')} <ArrowLeftRight size={12} style={{ display: 'inline', margin: '0 4px' }} /> {s.destinations.join(', ')}</span>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); removeSavedSearch(i); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '0', display: 'flex', marginLeft: '4px' }} title={t("remove")}>
+                  <span>{s.origins.join(', ')} <ArrowLeftRight size={12} className="chip-arrow" /> {s.destinations.join(', ')}</span>
+                  <button type="button" className="chip-remove" onClick={(e) => { e.stopPropagation(); removeSavedSearch(i); }} title={t("remove")}>
                     <X size={14} />
                   </button>
                 </div>
               ))}
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: '1 / -1' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' }}>
-              {renderEndpoints(origins, setOrigins, t("origin"), mode === 'trains' ? t("origin_placeholder_train") : t("origin_placeholder_flight"), t("add_origin"))}
+          <div className="endpoints">
+            {renderEndpoints(origins, setOrigins, t("origin"), mode === 'trains' ? t("origin_placeholder_train") : t("origin_placeholder_flight"), t("add_origin"))}
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 0' }}>
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => {
-                    setOrigins(destinations);
-                    setDestinations(origins);
-                  }}
-                  style={{ padding: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  title={t("swap_btn")}
-                >
-                  <ArrowLeftRight size={18} />
-                </button>
-              </div>
-
-              {renderEndpoints(destinations, setDestinations, t("destination"), mode === 'trains' ? t("dest_placeholder_train") : t("dest_placeholder_flight"), t("add_dest"))}
+            <div className="swap">
+              <button
+                type="button"
+                className="btn-outline field-btn"
+                onClick={() => {
+                  setOrigins(destinations);
+                  setDestinations(origins);
+                }}
+                title={t("swap_btn")}
+              >
+                <ArrowLeftRight size={18} />
+              </button>
             </div>
+
+            {renderEndpoints(destinations, setDestinations, t("destination"), mode === 'trains' ? t("dest_placeholder_train") : t("dest_placeholder_flight"), t("add_dest"))}
           </div>
-          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <label className="form-label" style={{ marginBottom: '8px' }}>{t("dates_label")}</label>
+          <div className="form-group date-field">
+            <label className="form-label">{t("dates_label")}</label>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
-                <Calendar size={18} style={{ position: 'absolute', left: '10px', color: 'var(--muted)', zIndex: 1 }} />
+              <div className="date-picker-row">
+                <Calendar size={18} className="date-picker-icon" />
                 <DatePicker
                   selectsRange={true}
                   monthsShown={MONTHS_SHOWN}
@@ -626,52 +616,45 @@ export default function Dashboard() {
                   }}
                   dateFormat="dd/MM/yyyy"
                   placeholderText={t("dates_placeholder")}
-                  className="w-full pl-8"
+                  className="date-input"
                   isClearable={true}
-                  customInput={<input style={{ paddingLeft: '36px' }} />}
                 />
                 <button
                   type="button"
-                  className="btn-outline"
+                  className="btn-outline field-btn"
                   onClick={() => addRangeToPool(depDateRange, setDepDateRange, setDepRangePool)}
                   disabled={!depDateRange[0]}
-                  style={{ padding: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: depDateRange[0] ? 1 : 0.4 }}
                   title={t("add_range")}
                 >
                   <CalendarPlus size={18} />
                 </button>
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px', paddingLeft: '4px' }}>{t("start_end")}</div>
+              <div className="hint">{t("start_end")}</div>
               {renderRangePool(depRangePool, setDepRangePool)}
             </div>
           </div>
 
         </div>
 
-        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
-          <button type="button" className="btn-outline" onClick={handleSaveSearch} title={t("save_destinations")} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="form-actions">
+          <button type="button" className="btn-outline with-icon" onClick={handleSaveSearch} title={t("save_destinations")}>
             <Bookmark size={16} /> {t("save_btn")}
           </button>
 
-          <button type="button" className="btn-outline" onClick={openOperatorSite} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button type="button" className="btn-outline with-icon" onClick={openOperatorSite}>
             {mode === 'trains' ? t("open_trenitalia") : t("open_google_flights")}
           </button>
 
-          <button type="button" className="btn-outline" onClick={() => setIsHistoryOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' }} title={t('history')}>
+          <button type="button" className="btn-outline icon-btn" onClick={() => setIsHistoryOpen(true)} title={t('history')}>
             <Clock size={18} />
           </button>
 
-          <button type="submit" className="btn-primary" disabled={current.loading} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${t("search_solutions")} (Ctrl+Enter)`}>
+          <button type="submit" className="btn-primary with-icon" disabled={current.loading} title={`${t("search_solutions")} (Ctrl+Enter)`}>
             {current.loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
             {current.loading ? t("searching") : t("search_solutions")}
           </button>
           {current.loading && (
-            <button
-              type="button"
-              onClick={handleStop}
-              title={t("stop_search")}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', padding: '8px', color: 'var(--primary)' }}
-            >
+            <button type="button" className="stop-btn" onClick={handleStop} title={t("stop_search")}>
               <Square size={20} fill="currentColor" />
             </button>
           )}
@@ -679,13 +662,13 @@ export default function Dashboard() {
       </motion.form>
 
       {current.error && (
-        <div role="alert" style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: '#f87171' }}>
+        <div role="alert" className="search-error">
           {current.error}
         </div>
       )}
 
       {!current.loading && current.searched && !current.error && current.results.length === 0 && (
-        <div style={{ padding: '16px', textAlign: 'center', color: 'var(--muted)', background: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+        <div className="no-results">
           {t("no_solutions")}
         </div>
       )}
@@ -693,13 +676,12 @@ export default function Dashboard() {
       <AnimatePresence>
         {current.results.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', gap: '4px' }}>
+            <div className="toolbar">
+              <div className="toolbar-group">
                 <button
                   type="button"
-                  className={sortOrder === 'best' ? 'btn-primary' : 'btn-outline'}
+                  className={`${sortOrder === 'best' ? 'btn-primary' : 'btn-outline'} tool-btn`}
                   onClick={() => setSortOrder('best')}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
                   title={t("sort_best")}
                   aria-pressed={sortOrder === 'best'}
                 >
@@ -707,52 +689,48 @@ export default function Dashboard() {
                 </button>
                 <button
                   type="button"
-                  className={sortOrder === 'day' ? 'btn-primary' : 'btn-outline'}
+                  className={`${sortOrder === 'day' ? 'btn-primary' : 'btn-outline'} tool-btn`}
                   onClick={() => setSortOrder('day')}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
                   title={t("sort_day")}
                   aria-pressed={sortOrder === 'day'}
                 >
                   <CalendarDays size={18} />
                 </button>
               </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div className="toolbar-group">
                 <AnimatePresence>
                   {current.excluded.length > 0 && (
                     <motion.div
+                      className="toolbar-group"
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.15 }}
-                      style={{ display: 'flex', gap: '4px' }}
                     >
                       <button
                         type="button"
-                        className="btn-outline"
+                        className="btn-outline tool-btn"
                         onClick={() => patchMode(mode, { excluded: current.excluded.slice(0, -1) })}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
                         title={t("restore_last")}
                       >
                         <Undo2 size={18} />
                       </button>
                       <button
                         type="button"
-                        className="btn-outline"
+                        className="btn-outline tool-btn"
                         onClick={() => patchMode(mode, { excluded: [] })}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', borderRadius: '6px' }}
                         title={t("restore_all")}
                       >
                         <RotateCcw size={18} />
-                        <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{current.excluded.length}</span>
+                        <span className="tool-count">{current.excluded.length}</span>
                       </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
                 <button
                   type="button"
-                  className="btn-outline"
+                  className="btn-outline tool-btn"
                   onClick={handleCopyTable}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '6px' }}
                   title={t("copy_table")}
                 >
                   <Copy size={18} />
@@ -769,7 +747,7 @@ export default function Dashboard() {
                     <th>{t("duration")}</th>
                     <th>{t("price")}</th>
                     <th>{t("adj_cost")}</th>
-                    <th style={{ width: '48px' }} />
+                    <th className="row-action-col" />
                   </tr>
                 </thead>
                 <tbody>
@@ -809,8 +787,8 @@ export default function Dashboard() {
                           <td>{formatDateTime(r.dep, train)}</td>
                           <td>{formatDateTime(r.arr, train)}</td>
                           <td>{formatDuration(r.duration_min)}</td>
-                          <td style={{ fontWeight: 600 }}>{formatEuro(r.price_eur)}</td>
-                          <td style={{ color: 'var(--accent)' }}>{formatEuro(r.adjusted_cost)}</td>
+                          <td className="price">{formatEuro(r.price_eur)}</td>
+                          <td className="adjusted-cost">{formatEuro(r.adjusted_cost)}</td>
                           <td>
                             <button
                               type="button"
@@ -833,12 +811,11 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {current.results.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{sortOrder === 'day' ? t("results_per_day") : t("results_to_show")}</span>
+        <div className="result-count">
+          <span>{sortOrder === 'day' ? t("results_per_day") : t("results_to_show")}</span>
           <select
             value={itemsPerPage}
             onChange={e => setResultCounts(prev => ({ ...prev, [resultCountKey]: Number(e.target.value) }))}
-            style={{ width: '80px', padding: '6px 10px', background: 'var(--card-bg)' }}
           >
             {[3, 5, 10, 15, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
           </select>

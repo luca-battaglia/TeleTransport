@@ -62,14 +62,6 @@ body {
 }
 
 /* Glassmorphism Utilities */
-.glass {
-  background: var(--card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius);
-}
-
 .glass-panel {
   background: var(--card-bg);
   backdrop-filter: blur(20px);
@@ -118,19 +110,6 @@ button {
   transform: translateY(-1px);
 }
 
-.btn-accent {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  padding: 10px 20px;
-  border-radius: var(--radius);
-  font-size: 14px;
-}
-
-.btn-accent:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
 .btn-outline {
   background: transparent;
   color: var(--foreground);
@@ -144,6 +123,88 @@ button {
   background: var(--card-hover);
 }
 
+/* The rules below refine .btn-primary and .btn-outline, so they come after them. */
+.with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn,
+.field-btn,
+.tool-btn,
+.stop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn,
+.field-btn {
+  padding: 10px;
+}
+
+/* Sits next to a text field, at the field's height. */
+.field-btn {
+  height: 42px;
+}
+
+.field-btn:disabled {
+  opacity: 0.4;
+}
+
+.tool-btn {
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+.tool-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stop-btn {
+  background: none;
+  padding: 8px;
+  color: var(--primary);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+.saved-chip {
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chip-arrow {
+  display: inline;
+  margin: 0 4px;
+}
+
+.chip-remove {
+  display: flex;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.saved-chip .chip-remove {
+  margin-left: 4px;
+}
+
 /* Layout Utilities */
 .container {
   max-width: 1200px;
@@ -152,14 +213,8 @@ button {
 }
 
 .flex { display: flex; }
-.flex-col { flex-direction: column; }
 .items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-.justify-center { justify-content: center; }
-.gap-2 { gap: 8px; }
 .gap-4 { gap: 16px; }
-.gap-6 { gap: 24px; }
-.gap-8 { gap: 32px; }
 
 /* Table Styles */
 .table-container {
@@ -204,6 +259,18 @@ tr:hover td {
    previous row's border-bottom. */
 tr.day-start td {
   border-top: 2px solid var(--muted);
+}
+
+th.row-action-col {
+  width: 48px;
+}
+
+td.price {
+  font-weight: 600;
+}
+
+td.adjusted-cost {
+  color: var(--accent);
 }
 
 /* Per-row exclude control: quiet until its row is hovered or it takes focus. */
@@ -253,6 +320,199 @@ tr:hover .row-action,
   line-height: 1.5;
   background: rgba(38, 139, 210, 0.1);
   border: 1px solid rgba(38, 139, 210, 0.3);
+}
+
+/* Dashboard */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.mode-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mode-btn {
+  padding: 10px 24px;
+}
+
+.reminders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reminder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 8px;
+  color: #ca8a04;
+  font-weight: 500;
+}
+
+.reminder-icon {
+  font-size: 18px;
+}
+
+.search-form {
+  padding: 32px;
+}
+
+.saved-searches {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.endpoints {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.endpoint-list {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.endpoint-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.endpoint-field {
+  flex: 1;
+}
+
+.endpoint-row .field-btn {
+  margin-bottom: 4px;
+}
+
+.add-endpoint {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.date-field {
+  justify-content: space-between;
+}
+
+.date-field .form-label {
+  margin-bottom: 8px;
+}
+
+.date-picker-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-picker-icon {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  color: var(--muted);
+}
+
+.date-input {
+  padding-left: 36px;
+}
+
+.range-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hint {
+  margin-top: 4px;
+  padding-left: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.form-actions {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.search-error {
+  padding: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #f87171;
+}
+
+.no-results {
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 4px;
+}
+
+.result-count {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.result-count span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.result-count select {
+  width: 80px;
+  padding: 6px 10px;
+  background: var(--card-bg);
 }
 
 .site-footer {
