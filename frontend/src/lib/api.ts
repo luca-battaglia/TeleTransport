@@ -65,6 +65,16 @@ export class ApiError extends Error {
   }
 }
 
+// The translation of the error's code when there is one, else its own message.
+export function describeError(err: unknown, t: (key: string, params?: Record<string, string | number>) => string): string {
+  if (err instanceof ApiError) {
+    const key = `err_${err.code}`;
+    const text = t(key, { ...err.params, message: err.message });
+    return text === key ? err.message : text;
+  }
+  return err instanceof Error && err.message ? err.message : t('err_generic');
+}
+
 async function toApiError(res: Response): Promise<ApiError> {
   const body = await res.json().catch(() => ({}));
   const detail = body?.detail;

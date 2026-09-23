@@ -4,21 +4,9 @@ import { useEffect, useState } from 'react';
 import { X, Clock, Train, Plane } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n';
-import type { DateRange, ResultRow } from '@/lib/api';
 import { parseDateKey } from '@/lib/dates';
+import type { HistoryEntry } from '@/lib/history';
 import type { Mode } from '@/lib/settings';
-
-export interface HistoryEntry {
-  timestamp: number;
-  origin: string;
-  destination: string;
-  depStartStr: string;
-  depEndStr?: string;
-  // Every stretch the search covered. Absent on entries saved before pools
-  // existed, where the depStartStr/depEndStr span is the whole search.
-  depRanges?: DateRange[];
-  results: ResultRow[];
-}
 
 interface HistoryModalProps {
   isOpen: boolean;

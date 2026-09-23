@@ -5,6 +5,7 @@ import { Save, X, Download, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchConfig, type AppConfig } from '@/lib/api';
 import { localizeFlightPlace, useLanguage } from '@/lib/i18n';
+import { SAVED_SEARCHES_KEY } from '@/lib/searchForm';
 import {
   AIRPORT_LIST,
   DEFAULT_FLIGHT_SCORING,
@@ -199,7 +200,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
 
   const handleExport = () => {
     try {
-      const searches = localStorage.getItem('teletransport_saved_searches');
+      const searches = localStorage.getItem(SAVED_SEARCHES_KEY);
       const exportData = {
         teletransport_settings: loadSettings(),
         teletransport_saved_searches: searches ? JSON.parse(searches) : null,
@@ -233,7 +234,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
           imported = true;
         }
         if (data.teletransport_saved_searches) {
-          localStorage.setItem('teletransport_saved_searches', JSON.stringify(data.teletransport_saved_searches));
+          localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(data.teletransport_saved_searches));
           imported = true;
         }
         if (imported) {

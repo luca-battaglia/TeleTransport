@@ -59,3 +59,42 @@ export const futureRanges = (ranges: DateRange[], today = formatDateKey(new Date
   ranges
     .filter(r => r.end >= today)
     .map(r => (r.start < today ? { ...r, start: today } : r));
+
+// What the date field holds: the picker's current range, the stretches already
+// added to the pool, and whether the picker still shows the day it opened on.
+export type DateSelection = { picker: PickerValue; pool: DateRange[]; pristine: boolean };
+
+// The picker opens on today; the first range picked replaces it rather than extending it.
+export const freshDates = (): DateSelection => ({ picker: [new Date(), null], pool: [], pristine: true });
+
+// Restored dates lose the days that have passed. With several stretches left
+// they go to the pool and the picker starts empty; with none, it starts fresh.
+export const restoreDates = (restored: DateRange[], today?: string): DateSelection => {
+  const ranges = futureRanges(restored, today);
+  if (ranges.length === 0) return freshDates();
+  if (ranges.length === 1) return { picker: pickerFromRange(ranges[0]), pool: [], pristine: false };
+  return { picker: [null, null], pool: ranges, pristine: false };
+};
+
+// On a fresh picker the click that would end a range at today starts one instead.
+export const pickDates = (dates: DateSelection, update: PickerValue): DateSelection => ({
+  ...dates,
+  picker: dates.pristine && update[0] && update[1] ? [update[1], null] : update,
+  pristine: false,
+});
+
+// Clearing the picker keeps the added stretch from also counting as the
+// current selection, which would show it twice.
+export const addPickerToPool = (dates: DateSelection): DateSelection => {
+  const entry = rangeFromPicker(dates.picker);
+  if (!entry) return dates;
+  const pool = dates.pool.some(r => r.start === entry.start && r.end === entry.end)
+    ? dates.pool
+    : [...dates.pool, entry].sort((a, b) => a.start.localeCompare(b.start));
+  return { ...dates, pool, picker: [null, null] };
+};
+
+export const removeFromPool = (dates: DateSelection, range: DateRange): DateSelection => ({
+  ...dates,
+  pool: dates.pool.filter(r => !(r.start === range.start && r.end === range.end)),
+});
