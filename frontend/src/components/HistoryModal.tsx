@@ -5,6 +5,7 @@ import { X, Clock, Train, Plane } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n';
 import type { DateRange, ResultRow } from '@/lib/api';
+import { parseDateKey } from '@/lib/dates';
 import type { Mode } from '@/lib/settings';
 
 export interface HistoryEntry {
@@ -13,13 +14,9 @@ export interface HistoryEntry {
   destination: string;
   depStartStr: string;
   depEndStr?: string;
-  retStartStr?: string;
-  retEndStr?: string;
   // Every stretch the search covered. Absent on entries saved before pools
   // existed, where the depStartStr/depEndStr span is the whole search.
   depRanges?: DateRange[];
-  retRanges?: DateRange[];
-  oneWay: boolean;
   results: ResultRow[];
 }
 
@@ -48,8 +45,8 @@ function HistoryList({ onClose, mode, history, onSelect }: Omit<HistoryModalProp
   const { t, language } = useLanguage();
   const [now] = useState(Date.now);
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short' });
+  const formatDate = (dateKey: string) =>
+    parseDateKey(dateKey).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short' });
 
   const timeAgo = (ms: number) => {
     const minutes = Math.floor((now - ms) / 60_000);
@@ -116,12 +113,6 @@ function HistoryList({ onClose, mode, history, onSelect }: Omit<HistoryModalProp
                   <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                     {formatDate(entry.depStartStr)}
                     {entry.depEndStr && entry.depEndStr !== entry.depStartStr && ` - ${formatDate(entry.depEndStr)}`}
-                    {!entry.oneWay && entry.retStartStr && (
-                      <>
-                        {' '} | {t("return_label")}: {formatDate(entry.retStartStr)}
-                        {entry.retEndStr && entry.retEndStr !== entry.retStartStr && ` - ${formatDate(entry.retEndStr)}`}
-                      </>
-                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>

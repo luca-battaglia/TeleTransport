@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { writeJson } from './storage';
 
 export type Mode = 'trains' | 'flights';
 export type ReminderTarget = Mode | 'both' | 'disabled';
@@ -137,9 +138,11 @@ export function loadSettings(): Settings {
   return cachedSettings;
 }
 
-export function saveSettings(settings: Settings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+// Returns whether the browser kept the settings.
+export function saveSettings(settings: Settings): boolean {
+  if (!writeJson('local', SETTINGS_KEY, settings)) return false;
   window.dispatchEvent(new Event(SETTINGS_EVENT));
+  return true;
 }
 
 function subscribe(listener: () => void) {
@@ -156,6 +159,9 @@ export function useSettings(): Settings {
 }
 
 const IATA_CODE = /^[A-Z]{3}$/;
+// A city with several airports maps to all of them, e.g. rome=FCO,CIA.
+export const AIRPORT_LIST = /^[A-Z]{3}(,[A-Z]{3}){0,7}$/;
+const MAX_PLACE_LENGTH = 80;
 
 const knownNumbers = (values: object | undefined, known: object) =>
   Object.fromEntries(
@@ -181,13 +187,11 @@ export function configOverrides(settings: Settings, mode: Mode): Json | null {
 
   const out: Json = {};
   if (Object.keys(flights).length) out.flights = flights;
-  const mapping = settings.ui?.flights?.iata_mapping;
-  if (mapping && Object.keys(mapping).length) {
-    out.ui = {
-      flights: {
-        iata_mapping: Object.fromEntries(Object.entries(mapping).filter(([, code]) => IATA_CODE.test(code))),
-      },
-    };
+  const mapping = Object.entries(settings.ui?.flights?.iata_mapping ?? {}).filter(
+    ([place, codes]) => place.trim() && place.trim().length <= MAX_PLACE_LENGTH && AIRPORT_LIST.test(codes)
+  );
+  if (mapping.length) {
+    out.ui = { flights: { iata_mapping: Object.fromEntries(mapping) } };
   }
   return Object.keys(out).length ? out : null;
 }

@@ -15,8 +15,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The preferences script sets lang and the theme class before React hydrates,
+  // so these two elements are expected to differ from the server's HTML.
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Applies the stored theme and language before first paint, so the page
             does not flash light or English before React takes over. */}
@@ -38,7 +40,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <LanguageProvider>
           <div className="container" style={{ paddingTop: '24px', paddingBottom: '32px' }}>
             <Navbar />

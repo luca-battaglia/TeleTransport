@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { Save, X, Download, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { fetchConfig } from '@/lib/api';
-import { useLanguage } from '@/lib/i18n';
+import { fetchConfig, type AppConfig } from '@/lib/api';
+import { localizeFlightPlace, useLanguage } from '@/lib/i18n';
 import {
+  AIRPORT_LIST,
   DEFAULT_FLIGHT_SCORING,
   DEFAULT_TRAIN_SCORING,
   SETTINGS_KEY,
@@ -67,6 +68,14 @@ const asStrings = <T extends object>(values: T) =>
 
 const splitList = (text: string) => text.split(',').map(s => s.trim()).filter(Boolean);
 
+const formatMapping = (mapping: Record<string, string>) => Object.entries(mapping).map(([k, v]) => `${k}=${v}`).join('\n');
+
+const sameMapping = (a: Record<string, string>, b: Record<string, string>) =>
+  JSON.stringify(Object.entries(a)) === JSON.stringify(Object.entries(b));
+
+// Flight places come from the server in English and are shown in the interface language.
+const flightPlaceNames = (place: string) => [place, localizeFlightPlace(place, 'en'), localizeFlightPlace(place, 'it')];
+
 type ReminderRow = { id: string; text: string; target: ReminderTarget };
 type AirportRow = { iata: string } & Record<keyof AirportExtra, string>;
 
@@ -105,32 +114,44 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
     flightOrigin: initial.ui?.flights?.default_origin ?? '',
     flightDest: initial.ui?.flights?.default_destination ?? '',
     flightOptions: (initial.ui?.flights?.options ?? []).join(', '),
-    iataMapping: Object.entries(initial.ui?.flights?.iata_mapping ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'),
+    iataMapping: formatMapping(initial.ui?.flights?.iata_mapping ?? {}),
   }));
   const [followSystemTheme, setFollowSystemTheme] = useState(() => readThemePreference() === 'system');
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle');
+  const [serverConfig, setServerConfig] = useState<AppConfig | null>(null);
 
   // Fields the user never customized show the server's defaults.
   useEffect(() => {
     fetchConfig().then(cfg => {
       if (!cfg) return;
+      setServerConfig(cfg);
       setUi(prev => ({
         ...prev,
         trainOrigin: prev.trainOrigin || cfg.trains.default_origin,
         trainDest: prev.trainDest || cfg.trains.default_destination,
-        flightOrigin: prev.flightOrigin || cfg.flights.default_origin,
-        flightDest: prev.flightDest || cfg.flights.default_destination,
-        iataMapping: prev.iataMapping || Object.entries(cfg.flights.iata_mapping).map(([k, v]) => `${k}=${v}`).join('\n'),
+        flightOrigin: prev.flightOrigin || localizeFlightPlace(cfg.flights.default_origin, language),
+        flightDest: prev.flightDest || localizeFlightPlace(cfg.flights.default_destination, language),
+        iataMapping: prev.iataMapping || formatMapping(cfg.flights.iata_mapping),
       }));
     });
-  }, []);
+  }, [language]);
 
   const handleSave = () => {
     const iataMapping: Record<string, string> = {};
     for (const line of ui.iataMapping.split('\n')) {
       const [name, code] = line.split('=').map(part => part?.trim());
-      if (name && code && /^[A-Za-z]{3}(,[A-Za-z]{3}){0,7}$/.test(code)) iataMapping[name] = code.toUpperCase();
+      const codes = code?.toUpperCase().replace(/\s+/g, '');
+      if (name && codes && AIRPORT_LIST.test(codes)) iataMapping[name] = codes;
     }
+
+    // What still equals the server's defaults is not stored as the user's own,
+    // so later changes on the server keep reaching this browser, and default
+    // places keep following the interface language.
+    const own = (value: string, serverNames: string[] = []) => {
+      const trimmed = value.trim();
+      return serverNames.includes(trimmed) ? '' : trimmed;
+    };
+    const ownMapping = serverConfig && sameMapping(iataMapping, serverConfig.flights.iata_mapping) ? {} : iataMapping;
 
     const extras: Record<string, AirportExtra> = {};
     for (const row of airportExtras) {
@@ -156,24 +177,24 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
       ),
       ui: {
         trains: {
-          default_origin: ui.trainOrigin.trim(),
-          default_destination: ui.trainDest.trim(),
+          default_origin: own(ui.trainOrigin, serverConfig ? [serverConfig.trains.default_origin] : []),
+          default_destination: own(ui.trainDest, serverConfig ? [serverConfig.trains.default_destination] : []),
           ...(trainOptions.length ? { options: trainOptions } : {}),
         },
         flights: {
-          default_origin: ui.flightOrigin.trim(),
-          default_destination: ui.flightDest.trim(),
+          default_origin: own(ui.flightOrigin, serverConfig ? flightPlaceNames(serverConfig.flights.default_origin) : []),
+          default_destination: own(ui.flightDest, serverConfig ? flightPlaceNames(serverConfig.flights.default_destination) : []),
           ...(flightOptions.length ? { options: flightOptions } : {}),
-          iata_mapping: iataMapping,
+          ...(Object.keys(ownMapping).length ? { iata_mapping: ownMapping } : {}),
         },
       },
       trains: { scoring: scoring(TRAIN_FIELDS, trainScoring, DEFAULT_TRAIN_SCORING) },
       flights: { scoring: scoring(FLIGHT_FIELDS, flightScoring, DEFAULT_FLIGHT_SCORING), airport_extras: extras },
     };
 
-    saveSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    const ok = saveSettings(settings);
+    setSaveState(ok ? 'saved' : 'failed');
+    if (ok) setTimeout(() => setSaveState('idle'), 2000);
   };
 
   const handleExport = () => {
@@ -406,7 +427,8 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
             <Save size={16} />
             {t("save_settings")}
           </button>
-          {saved && <span style={{ color: '#4ade80', fontSize: '14px', fontWeight: 500 }}>{t("saved_local")}</span>}
+          {saveState === 'saved' && <span style={{ color: '#4ade80', fontSize: '14px', fontWeight: 500 }}>{t("saved_local")}</span>}
+          {saveState === 'failed' && <span role="alert" style={{ color: '#f87171', fontSize: '14px', fontWeight: 500 }}>{t("save_failed")}</span>}
 
           <div style={{ flex: 1, minWidth: '20px' }}></div>
 

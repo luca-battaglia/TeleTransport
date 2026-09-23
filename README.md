@@ -12,7 +12,7 @@ Search trains and flights across several days and rank them by what the trip rea
 I built this because I kept doing the same sums by hand. Is a €30 flight at 5:40, with an hour's drive to the airport, better than a €55 train after breakfast? TeleTransport searches Trenitalia and Google Flights over the dates you give it, puts a price in euros on travel time, early starts, late arrivals, changes and airport transfers, and sorts every option by the total. I call that the adjusted cost.
 
 - Trains from Trenitalia, flights from Google Flights through [SerpApi](https://serpapi.com)
-- Up to 5 origins and 5 destinations, and up to 14 days each way, even non-consecutive ones
+- Several origins and destinations at once, and up to 14 days, even non-consecutive ones
 - Cities with more than one airport are searched on all of them: Milan means Malpensa, Linate and Bergamo
 - You decide what an hour of your time is worth, in the settings or in [`travel_ranker.toml`](travel_ranker.toml)
 - Each result opens the operator's own page for that route and day, ready to book
@@ -31,7 +31,7 @@ adjusted_cost = price
               + airport transfers (flights only: fuel, plus driving hours at your and your companions' time value)
 ```
 
-Ties go to the shorter trip. A round-trip flight is priced as a whole, with the penalties of both legs.
+Ties go to the shorter trip. Every search is one-way; for the way back, swap origin and destination.
 
 ## How it's built
 
@@ -67,7 +67,7 @@ pip install -r requirements.txt
 playwright install chromium
 cp .env.example .env               # add SERPAPI_KEY for the CLI
 
-uvicorn backend.main:app --port 8000
+uvicorn backend.main:app --port 8000 --env-file .env
 ```
 
 In a second terminal:
@@ -83,18 +83,18 @@ Put your SerpApi key in the settings of the web app. The API docs are at http://
 ## Command line
 
 ```bash
-python -m cli trains --from "Milano Centrale" --to "Roma Termini" --dep 3-5/10 --ret 10/10
+python -m cli trains --from "Milano Centrale" --to "Roma Termini" --dep 3-5/10
 python -m cli flights --from Zurich --to Rome --to Naples --dep 2026-10-03 --sort day --links
 ```
 
 ```text
 | Route                           | Departure        | Arrival          | Duration   |   Changes |   Price (EUR) |   Adj. cost (EUR) |
 |---------------------------------|------------------|------------------|------------|-----------|---------------|-------------------|
-| Milano Centrale -> Roma Termini | 2026-10-02 19:35 | 2026-10-02 22:39 | 3h04       |         0 |         50.90 |            121.98 |
-| Milano Centrale -> Roma Termini | 2026-10-02 17:35 | 2026-10-02 20:45 | 3h10       |         0 |         62.90 |            126.23 |
+| Milano Centrale -> Roma Termini | 2026-10-03 19:35 | 2026-10-03 22:39 | 3h04       |         0 |         50.90 |            121.98 |
+| Milano Centrale -> Roma Termini | 2026-10-03 17:35 | 2026-10-03 20:45 | 3h10       |         0 |         62.90 |            126.23 |
 ```
 
-Dates can be `2026-10-03`, `3/10`, `3-5/10` or `30/9..2/10`, and `--dep` and `--ret` can be repeated. Station names are in Italian, because that is what Trenitalia understands. `python -m cli trains --help` lists every option.
+Dates can be `2026-10-03`, `3/10`, `3-5/10` or `30/9..2/10`, and `--dep` can be repeated. Station names are in Italian, because that is what Trenitalia understands. `python -m cli trains --help` lists every option.
 
 ## Tests
 
@@ -102,7 +102,7 @@ Dates can be `2026-10-03`, `3/10`, `3-5/10` or `30/9..2/10`, and `--dep` and `--
 pip install -r requirements-dev.txt
 pytest
 ruff check .
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm test && npm run build
 ```
 
 GitHub Actions runs them on every push, and the backend is only deployed when they pass.
@@ -115,7 +115,7 @@ Your SerpApi key stays in your browser and reaches the server only with your fli
 
 - Trenitalia's endpoints are not documented, so they can change without warning.
 - Trenitalia keeps you logged in per browser tab, so a booking link opens logged out unless a Trenitalia tab is already open. [`userscripts/`](userscripts) has an optional Tampermonkey script that fixes it.
-- TeleTransport is not affiliated with Trenitalia, Google or SerpApi. It reads public timetables and fares at low volume, with caching, and does not book or resell anything. The prices on the operators' sites are the ones that count.
+- TeleTransport is not affiliated with Trenitalia, Google or SerpApi. It reads public timetables and fares at low volume, with caching and a cap on how much one search may ask for, and does not book or resell anything. The prices on the operators' sites are the ones that count.
 
 ## License
 

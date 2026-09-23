@@ -9,13 +9,12 @@ export type SearchPayload = {
   origins: string[];
   destinations: string[];
   dep_ranges: DateRange[];
-  ret_ranges: DateRange[];
-  one_way: boolean;
   lang: 'it' | 'en';
 };
 
-export type TrainRow = {
-  route: string;
+// One shape for trains and flights. Train times carry their UTC offset; flight
+// times carry none, being local to their airport already.
+export type ResultRow = {
   origin: string;
   destination: string;
   dep: string;
@@ -27,20 +26,23 @@ export type TrainRow = {
   booking_url: string;
 };
 
-export type FlightRow = {
-  origin: string;
-  destination: string;
-  out_dep: string;
-  out_arr: string;
-  in_dep: string | null;
-  in_arr: string | null;
-  total_duration_min: number;
-  price_eur: number;
-  adjusted_cost: number;
-  booking_url: string;
+const ROW_FIELDS: Record<keyof ResultRow, 'string' | 'number'> = {
+  origin: 'string',
+  destination: 'string',
+  dep: 'string',
+  arr: 'string',
+  duration_min: 'number',
+  changes: 'number',
+  price_eur: 'number',
+  adjusted_cost: 'number',
+  booking_url: 'string',
 };
 
-export type ResultRow = TrainRow | FlightRow;
+// Rows restored from browser storage may predate the current shape: flight rows
+// saved before round trips were dropped have out_dep instead of dep.
+export const isResultRow = (value: unknown): value is ResultRow =>
+  typeof value === 'object' && value !== null &&
+  Object.entries(ROW_FIELDS).every(([key, type]) => typeof (value as Record<string, unknown>)[key] === type);
 
 export type SearchResponse = {
   data: ResultRow[];
