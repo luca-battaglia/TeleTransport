@@ -36,7 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VPS_HOST: ${{ secrets.VPS_HOST }}
+      # A user that owns the code and may restart the service, and nothing else:
+      # the service itself runs as another user, which cannot write the code.
       VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+      APP_DIR: /opt/teletransport
     steps:
       - uses: actions/checkout@v4
 
@@ -54,18 +57,23 @@ jobs:
 
       - name: Sync code
         run: |
-          target="$VPS_USERNAME@$VPS_HOST:teletransport_backend"
+          target="$VPS_USERNAME@$VPS_HOST:$APP_DIR"
           rsync -az --delete --exclude '__pycache__' backend/ "$target/backend/"
           rsync -az --delete --exclude '__pycache__' core/ "$target/core/"
           rsync -az requirements.txt travel_ranker.toml "$target/"
 
       - name: Install dependencies and restart
         run: |
-          ssh "$VPS_USERNAME@$VPS_HOST" '
+          ssh "$VPS_USERNAME@$VPS_HOST" "APP_DIR=$APP_DIR bash -s" <<'EOF'
             set -eu
-            cd ~/teletransport_backend
+            cd "$APP_DIR"
             venv/bin/pip install --quiet -r requirements.txt
+            # A new Playwright release needs its own browser build; a no-op otherwise.
+            PLAYWRIGHT_BROWSERS_PATH="$APP_DIR/ms-playwright" venv/bin/playwright install chromium
             sudo systemctl restart teletransport
-            sleep 5
-            systemctl is-active --quiet teletransport
-          '
+            for _ in $(seq 1 15); do
+              curl -fsS http://127.0.0.1:8000/api/health && exit 0
+              sleep 2
+            done
+            exit 1
+          EOF
