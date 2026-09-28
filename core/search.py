@@ -110,6 +110,7 @@ def _row(
     arr: datetime,
     duration_min: int,
     changes: int,
+    legs: List[str],
     price_eur: float,
     adjusted_cost: float,
     booking_url: str,
@@ -122,6 +123,7 @@ def _row(
         "arr": arr.isoformat(),
         "duration_min": duration_min,
         "changes": changes,
+        "legs": legs,
         "price_eur": price_eur,
         "adjusted_cost": round(adjusted_cost, 2),
         "booking_url": booking_url,
@@ -140,7 +142,7 @@ async def search_trains(query: SearchQuery, cfg: Mapping[str, Any]) -> List[Row]
     ranked = await trains.search_ranked_solutions(tasks, defaults, scoring)
     return [
         _row(
-            r.origin, r.destination, r.dep, r.arr, int(r.duration.total_seconds() // 60), r.changes,
+            r.origin, r.destination, r.dep, r.arr, int(r.duration.total_seconds() // 60), r.changes, r.legs,
             r.price_eur, r.adjusted_cost, trains.build_booking_url(r.origin, r.destination, r.dep, lang=query.lang),
         )
         for r in ranked
@@ -201,7 +203,7 @@ async def search_flights(
 
     return [
         _row(
-            r.origin, r.destination, r.dep, r.arr, r.duration_min, r.changes,
+            r.origin, r.destination, r.dep, r.arr, r.duration_min, r.changes, r.legs,
             r.price_eur, r.adjusted_cost, flights.build_booking_url(r.origin, r.destination, r.dep, lang=query.lang),
         )
         for r in rows

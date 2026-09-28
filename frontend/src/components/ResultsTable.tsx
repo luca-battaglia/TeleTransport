@@ -1,7 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { Share2, X } from 'lucide-react';
+import type { ResultRow } from '@/lib/api';
 import { RESULT_COLUMNS, localeOf, rowCells } from '@/lib/format';
 import { useLanguage } from '@/lib/i18n';
 import { dayOf, type IndexedRow, type SortOrder } from '@/lib/results';
@@ -12,9 +13,10 @@ interface ResultsTableProps {
   mode: Mode;
   sortOrder: SortOrder;
   onExclude: (index: number) => void;
+  onShare: (row: ResultRow) => void;
 }
 
-export default function ResultsTable({ rows, mode, sortOrder, onExclude }: ResultsTableProps) {
+export default function ResultsTable({ rows, mode, sortOrder, onExclude, onShare }: ResultsTableProps) {
   const { t, language } = useLanguage();
   const train = mode === 'trains';
   const locale = localeOf(language);
@@ -68,9 +70,14 @@ export default function ResultsTable({ rows, mode, sortOrder, onExclude }: Resul
                   <td className="price">{price}</td>
                   <td className="adjusted-cost">{adjustedCost}</td>
                   <td>
-                    <button type="button" className="row-action" onClick={() => onExclude(index)} title={t("exclude_row")}>
-                      <X size={16} />
-                    </button>
+                    <div className="row-actions">
+                      <button type="button" className="row-action row-action-share" onClick={() => onShare(r)} title={t("share_row")}>
+                        <Share2 size={16} />
+                      </button>
+                      <button type="button" className="row-action" onClick={() => onExclude(index)} title={t("exclude_row")}>
+                        <X size={16} />
+                      </button>
+                    </div>
                   </td>
                 </motion.tr>
               );

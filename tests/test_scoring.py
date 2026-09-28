@@ -4,7 +4,7 @@ import pytest
 
 from core.flights import FlightsScoringConfig, airport_transfer_cost, late_arrival_penalty, resolve_iata
 from core.search import DEFAULT_IATA_MAPPING
-from core.trains import TrainScoringConfig, compute_solution_metrics
+from core.trains import TrainScoringConfig, compute_solution_metrics, train_legs
 
 
 def train_solution(dep: str, arr: str, price: str = "40,00", legs: int = 1) -> dict:
@@ -44,6 +44,18 @@ def test_unsaleable_train_solutions_are_skipped():
     item = train_solution("2026-10-02T10:00:00+02:00", "2026-10-02T13:00:00+02:00")
     item["solution"]["status"] = "SOLD_OUT"
     assert compute_solution_metrics(item, TrainScoringConfig()) is None
+
+
+def test_train_legs_are_named_as_station_boards_show_them():
+    item = train_solution("2026-10-08T09:33:00+02:00", "2026-10-08T17:50:00+02:00", legs=3)
+    # Trimmed from a real LeFrecce answer for Zurich to Rome.
+    item["solution"]["trains"] = [
+        {"acronym": "EC", "name": "15", "description": "15", "trainCategory": "EuroCity"},
+        {"acronym": "IC", "name": "597", "description": "597", "trainCategory": "Intercity"},
+        {"acronym": "RE", "name": "18715", "description": "TRENORD 18715", "trainCategory": "Regionale"},
+    ]
+    assert train_legs(item) == ["EC 15", "IC 597", "RE 18715"]
+    assert train_legs(train_solution("2026-10-08T09:33:00+02:00", "2026-10-08T17:50:00+02:00")) == []
 
 
 def test_flight_late_arrival_wraps_past_midnight():

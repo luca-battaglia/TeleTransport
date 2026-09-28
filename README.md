@@ -16,6 +16,8 @@ I built this because I kept doing the same sums by hand. Is a €30 flight at 5:
 - Cities with more than one airport are searched on all of them: Milan means Malpensa, Linate and Bergamo
 - You decide what an hour of your time is worth, in the settings or in [`travel_ranker.toml`](travel_ranker.toml)
 - Each result opens the operator's own page for that route and day, ready to book
+- Any result can be shared to WhatsApp or Telegram as a short message whose link previews as a card with times, changes, train or flight numbers and price
+- The results table copies as Markdown, with each route still linking to the operator
 - A web app in English and Italian, and a command-line version with the same options
 
 Flight searches need a free SerpApi key, which you paste in the settings. Without one, the live site lets you try a couple of small flight searches a day.

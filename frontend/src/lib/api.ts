@@ -21,12 +21,15 @@ export type ResultRow = {
   arr: string;
   duration_min: number;
   changes: number;
+  // The trains or flights taken, e.g. "FR 9633" or "SWISS LX 1726". Rows saved
+  // before the backend sent them have none.
+  legs?: string[];
   price_eur: number;
   adjusted_cost: number;
   booking_url: string;
 };
 
-const ROW_FIELDS: Record<keyof ResultRow, 'string' | 'number'> = {
+const ROW_FIELDS: Record<Exclude<keyof ResultRow, 'legs'>, 'string' | 'number'> = {
   origin: 'string',
   destination: 'string',
   dep: 'string',
@@ -40,9 +43,12 @@ const ROW_FIELDS: Record<keyof ResultRow, 'string' | 'number'> = {
 
 // Rows restored from browser storage may predate the current shape: flight rows
 // saved before round trips were dropped have out_dep instead of dep.
-export const isResultRow = (value: unknown): value is ResultRow =>
-  typeof value === 'object' && value !== null &&
-  Object.entries(ROW_FIELDS).every(([key, type]) => typeof (value as Record<string, unknown>)[key] === type);
+export const isResultRow = (value: unknown): value is ResultRow => {
+  if (typeof value !== 'object' || value === null) return false;
+  const fields = value as Record<string, unknown>;
+  const legsOk = fields.legs === undefined || (Array.isArray(fields.legs) && fields.legs.every(leg => typeof leg === 'string'));
+  return legsOk && Object.entries(ROW_FIELDS).every(([key, type]) => typeof fields[key] === type);
+};
 
 export type SearchResponse = {
   data: ResultRow[];

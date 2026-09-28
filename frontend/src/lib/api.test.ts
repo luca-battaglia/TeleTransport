@@ -14,8 +14,10 @@ const row = {
 };
 
 describe('isResultRow', () => {
-  it('accepts the current row shape', () => {
+  it('accepts the current row shape, and rows saved before legs existed', () => {
+    expect(isResultRow({ ...row, legs: ['SWISS LX 1726'] })).toBe(true);
     expect(isResultRow(row)).toBe(true);
+    expect(isResultRow({ ...row, legs: 'SWISS LX 1726' })).toBe(false);
   });
 
   it('rejects flight rows saved before round trips were dropped', () => {

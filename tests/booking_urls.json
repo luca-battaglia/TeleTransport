@@ -1,0 +1,34 @@
+[
+  {
+    "mode": "trains",
+    "origin": "Firenze S. M. Novella",
+    "destination": "Zurigo HB",
+    "dep": "2026-11-09T07:05:00+01:00",
+    "lang": "it",
+    "url": "https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/?isRoundTrip=false&departureStation=Firenze+S.+M.+Novella&arrivalStation=Zurigo+HB&departureDate=09-11-2026&departureTime=07%3A00&noOfAdults=1&noOfChildren=0&searchSolutions=true&lang=it"
+  },
+  {
+    "mode": "trains",
+    "origin": "Forlì",
+    "destination": "Reggio nell'Emilia AV Mediopadana",
+    "dep": "2026-07-31T23:59:00+02:00",
+    "lang": "en",
+    "url": "https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/?isRoundTrip=false&departureStation=Forl%C3%AC&arrivalStation=Reggio+nell%27Emilia+AV+Mediopadana&departureDate=31-07-2026&departureTime=23%3A00&noOfAdults=1&noOfChildren=0&searchSolutions=true&lang=en"
+  },
+  {
+    "mode": "flights",
+    "origin": "ZRH",
+    "destination": "FCO",
+    "dep": "2026-09-27T22:45:00",
+    "lang": "en",
+    "url": "https://www.google.com/travel/flights?q=Flights+to+FCO+from+ZRH+on+2026-09-27+one-way&hl=en"
+  },
+  {
+    "mode": "flights",
+    "origin": "MXP",
+    "destination": "LHR",
+    "dep": "2026-12-31T06:10:00",
+    "lang": "it",
+    "url": "https://www.google.com/travel/flights?q=Flights+to+LHR+from+MXP+on+2026-12-31+one-way&hl=it"
+  }
+]

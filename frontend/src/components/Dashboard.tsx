@@ -9,6 +9,7 @@ import ResultsTable from '@/components/ResultsTable';
 import ResultsToolbar from '@/components/ResultsToolbar';
 import SavedSearches from '@/components/SavedSearches';
 import SearchForm from '@/components/SearchForm';
+import ShareModal from '@/components/ShareModal';
 import { useDemoQuota } from '@/hooks/useDemoQuota';
 import { loadDashboard, usePersistedDashboard } from '@/hooks/usePersistedDashboard';
 import { useSavedSearches } from '@/hooks/useSavedSearches';
@@ -16,11 +17,12 @@ import { useSearch } from '@/hooks/useSearch';
 import { useShortcuts } from '@/hooks/useShortcuts';
 import { fetchConfig, type AppConfig } from '@/lib/api';
 import { collectRanges, restoreDates, type DateSelection } from '@/lib/dates';
-import { RESULT_COLUMNS, localeOf, markdownTable, rowCells } from '@/lib/format';
+import { RESULT_COLUMNS, localeOf, markdownRowCells, markdownTable } from '@/lib/format';
 import { rangesOf } from '@/lib/history';
 import { localizeFlightPlace, useLanguage } from '@/lib/i18n';
 import { pageOf, type ResultCountKey, type SortOrder } from '@/lib/results';
 import { TRENITALIA_URL, googleFlightsUrl } from '@/lib/searchForm';
+import { tripOf, type SharedTrip } from '@/lib/share';
 import { useSettings, type Mode } from '@/lib/settings';
 
 // Used until the backend's /api/config answers, and if it never does.
@@ -50,6 +52,7 @@ export default function Dashboard() {
   const [resultCounts, setResultCounts] = useState(restored.resultCounts);
   const [sortOrder, setSortOrder] = useState<SortOrder>(restored.sortOrder);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [sharedTrip, setSharedTrip] = useState<SharedTrip | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
   const demo = useDemoQuota(mode, Boolean(settings.serpapiKey));
@@ -100,7 +103,7 @@ export default function Dashboard() {
 
   const copyTable = () => {
     if (pageRows.length === 0) return;
-    const cells = pageRows.map(({ row }) => rowCells(row, mode === 'trains', localeOf(language)));
+    const cells = pageRows.map(({ row }) => markdownRowCells(row, mode === 'trains', localeOf(language)));
     navigator.clipboard
       .writeText(markdownTable(RESULT_COLUMNS.map(key => t(key)), cells))
       .catch(err => console.error('Clipboard error', err));
@@ -179,7 +182,13 @@ export default function Dashboard() {
               onRestoreAll={search.restoreAll}
               onCopy={copyTable}
             />
-            <ResultsTable rows={pageRows} mode={mode} sortOrder={sortOrder} onExclude={search.exclude} />
+            <ResultsTable
+              rows={pageRows}
+              mode={mode}
+              sortOrder={sortOrder}
+              onExclude={search.exclude}
+              onShare={row => setSharedTrip(tripOf(row, mode, language))}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -191,6 +200,8 @@ export default function Dashboard() {
           onChange={count => setResultCounts(prev => ({ ...prev, [resultCountKey]: count }))}
         />
       )}
+
+      <ShareModal trip={sharedTrip} onClose={() => setSharedTrip(null)} />
 
       <HistoryModal
         isOpen={isHistoryOpen}

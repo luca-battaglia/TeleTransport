@@ -74,6 +74,24 @@ def test_rows_are_ranked_by_adjusted_cost_not_price():
     assert best["booking_url"].startswith("https://www.google.com/travel/flights?")
 
 
+def test_rows_name_each_flight_by_airline_and_number():
+    item = flight("2026-10-08 07:00", "2026-10-08 11:10", 250, 180)
+    item["flights"] = [
+        {"departure_airport": {"time": "2026-10-08 07:00"}, "arrival_airport": {"time": "2026-10-08 08:05"},
+         "airline": "Lufthansa", "flight_number": "LH 2373"},
+        {"departure_airport": {"time": "2026-10-08 09:40"}, "arrival_airport": {"time": "2026-10-08 11:10"},
+         "airline": "Lufthansa", "flight_number": "LH 1864"},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"search_metadata": {"status": "Success"}, "best_flights": [item]})
+
+    query = SearchQuery.create(["ZRH"], ["FCO"], [(d(8), d(8))])
+    rows = run(search_flights(query, NO_CACHE, API_KEY, client=serpapi(handler)))
+    assert rows[0]["legs"] == ["Lufthansa LH 2373", "Lufthansa LH 1864"]
+    assert rows[0]["changes"] == 1
+
+
 def test_a_city_is_searched_on_all_its_airports_and_rows_name_the_one_used():
     searched = []
 

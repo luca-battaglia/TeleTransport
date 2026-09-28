@@ -112,6 +112,7 @@ class RankedSolution:
     changes: int
     price_eur: float
     adjusted_cost: float
+    legs: List[str]
 
 
 def build_booking_url(origin: str, destination: str, dep: datetime, *, lang: str = "it") -> str:
@@ -370,6 +371,18 @@ def compute_solution_metrics(
     return dep_local, arr_local, duration, changes, base_price, adjusted
 
 
+def train_legs(solution_item: Dict[str, Any]) -> List[str]:
+    """The trains a solution takes, named as station boards show them: "EC 15", "FR 9633"."""
+    services = (solution_item.get("solution") or {}).get("trains")
+    legs: List[str] = []
+    for service in services if isinstance(services, list) else []:
+        if isinstance(service, dict):
+            label = " ".join(str(service.get(key) or "").strip() for key in ("acronym", "name")).strip()
+            if label:
+                legs.append(label)
+    return legs
+
+
 def solution_key(solution_item: Dict[str, Any]) -> str:
     sol = solution_item.get("solution") or {}
     sid = sol.get("id")
@@ -520,6 +533,7 @@ async def search_ranked_solutions(
                         changes=changes,
                         price_eur=round2(base_price),
                         adjusted_cost=round2(adjusted),
+                        legs=train_legs(item),
                     ))
                     added_in_call += 1
                     if len(found) >= defaults.max_per_day:

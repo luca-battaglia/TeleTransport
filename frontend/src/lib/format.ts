@@ -29,6 +29,13 @@ export const rowCells = (r: ResultRow, train: boolean, locale: string): string[]
   formatEuro(r.adjusted_cost, locale),
 ];
 
+// The route links to the operator's page, as it does in the table, so the copy
+// stays clickable once pasted into a Markdown editor such as Obsidian.
+export const markdownRowCells = (r: ResultRow, train: boolean, locale: string): string[] => {
+  const [route, ...rest] = rowCells(r, train, locale);
+  return [`[${route}](${r.booking_url})`, ...rest];
+};
+
 export const markdownTable = (headers: string[], rows: string[][]) => {
   const line = (cells: string[]) => `| ${cells.join(' | ')} |\n`;
   return line(headers) + `|${headers.map(() => '---').join('|')}|\n` + rows.map(line).join('');

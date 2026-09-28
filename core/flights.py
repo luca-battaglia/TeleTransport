@@ -247,6 +247,17 @@ def end_airports(item: Dict[str, Any], origin: str, destination: str) -> Tuple[s
     return first or origin, last or destination
 
 
+def flight_legs(item: Dict[str, Any]) -> List[str]:
+    """Each flight of a result by airline and number, as Google Flights lists them: "SWISS LX 1726"."""
+    legs: List[str] = []
+    for seg in item.get("flights") or []:
+        if isinstance(seg, dict):
+            label = " ".join(str(seg.get(key) or "").strip() for key in ("airline", "flight_number")).strip()
+            if label:
+                legs.append(label)
+    return legs
+
+
 def get_total_duration(item: Dict[str, Any]) -> int:
     d = item.get("total_duration")
     if isinstance(d, int) and d > 0:
@@ -319,6 +330,7 @@ class RankedRow:
     changes: int
     price_eur: int
     adjusted_cost: float
+    legs: List[str]
 
 
 def dedup_rows(rows: List[RankedRow]) -> List[RankedRow]:
@@ -403,7 +415,7 @@ async def search_day(
             + changes * float(scoring.connection_penalty_eur)
             + airport_transfer_cost(scoring, (dep_airport, arr_airport))
         )
-        rows.append(RankedRow(dep_airport, arr_airport, dep, arr, duration, changes, price, adjusted))
+        rows.append(RankedRow(dep_airport, arr_airport, dep, arr, duration, changes, price, adjusted, flight_legs(item)))
     return rows
 
 
