@@ -72,6 +72,8 @@ def test_rows_are_ranked_by_adjusted_cost_not_price():
     assert (best["dep"], best["arr"]) == ("2026-10-08T11:00:00", "2026-10-08T12:30:00")
     assert (best["duration_min"], best["changes"]) == (90, 0)
     assert best["booking_url"].startswith("https://www.google.com/travel/flights?")
+    # Without SerpApi's airports block the card falls back to the codes.
+    assert (best["origin_city"], best["destination_city"]) == (None, None)
 
 
 def test_rows_name_each_flight_by_airline_and_number():
@@ -95,11 +97,18 @@ def test_rows_name_each_flight_by_airline_and_number():
 def test_a_city_is_searched_on_all_its_airports_and_rows_name_the_one_used():
     searched = []
 
+    def airport(code: str, city: str) -> dict:
+        return {"airport": {"id": code, "name": f"{city} airport"}, "city": city, "country": "Italy"}
+
     def handler(request: httpx.Request) -> httpx.Response:
         searched.append(request.url.params.get("arrival_id"))
         return httpx.Response(200, json={
             "search_metadata": {"status": "Success"},
             "best_flights": [flight("2026-10-08 10:00", "2026-10-08 11:30", 90, 80, route=("ZRH", "CIA"))],
+            "airports": [{
+                "departure": [airport("ZRH", "Zurich")],
+                "arrival": [airport("FCO", "Rome"), airport("CIA", "Rome")],
+            }],
         })
 
     cfg = {**NO_CACHE, "flights": {**NO_CACHE["flights"], "airport_extras": {"CIA": {"fuel_eur": 25}}}}
@@ -107,6 +116,7 @@ def test_a_city_is_searched_on_all_its_airports_and_rows_name_the_one_used():
     rows = run(search_flights(query, cfg, API_KEY, client=serpapi(handler)))
     assert searched == ["FCO,CIA"]
     assert (rows[0]["origin"], rows[0]["destination"]) == ("ZRH", "CIA")
+    assert (rows[0]["origin_city"], rows[0]["destination_city"]) == ("Zurich", "Rome")
     assert "CIA" in rows[0]["booking_url"] and "FCO" not in rows[0]["booking_url"]
     assert rows[0]["adjusted_cost"] == pytest.approx(80 + 1.5 * 20 + 25)
 

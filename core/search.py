@@ -114,11 +114,19 @@ def _row(
     price_eur: float,
     adjusted_cost: float,
     booking_url: str,
+    origin_city: Optional[str] = None,
+    destination_city: Optional[str] = None,
 ) -> Row:
-    """The shape of a ranked solution, the same for trains and flights."""
+    """The shape of a ranked solution, the same for trains and flights.
+
+    Flights name their airports by code, so they also carry each airport's city
+    when SerpApi gives it; train stations are named in full already.
+    """
     return {
         "origin": origin,
         "destination": destination,
+        "origin_city": origin_city,
+        "destination_city": destination_city,
         "dep": dep.isoformat(),
         "arr": arr.isoformat(),
         "duration_min": duration_min,
@@ -205,6 +213,7 @@ async def search_flights(
         _row(
             r.origin, r.destination, r.dep, r.arr, r.duration_min, r.changes, r.legs,
             r.price_eur, r.adjusted_cost, flights.build_booking_url(r.origin, r.destination, r.dep, lang=query.lang),
+            r.origin_city, r.destination_city,
         )
         for r in rows
     ]

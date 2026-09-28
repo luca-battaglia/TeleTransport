@@ -49,7 +49,7 @@ class FlightsScoringConfig:
 @dataclass(frozen=True)
 class FlightsDefaultsConfig:
     currency: str = "EUR"
-    hl: str = "it"
+    hl: str = "en"
     gl: str = "it"
 
     deep_search: bool = True
@@ -258,6 +258,22 @@ def flight_legs(item: Dict[str, Any]) -> List[str]:
     return legs
 
 
+def airport_cities(resp: Dict[str, Any]) -> Dict[str, str]:
+    """The city of each airport a search covers, e.g. {"FCO": "Rome"}, in the language asked of SerpApi."""
+    cities: Dict[str, str] = {}
+    for block in resp.get("airports") or []:
+        if not isinstance(block, dict):
+            continue
+        for entry in [*(block.get("departure") or []), *(block.get("arrival") or [])]:
+            if not isinstance(entry, dict):
+                continue
+            code = (entry.get("airport") or {}).get("id")
+            city = str(entry.get("city") or "").strip()
+            if isinstance(code, str) and city:
+                cities[code] = city
+    return cities
+
+
 def get_total_duration(item: Dict[str, Any]) -> int:
     d = item.get("total_duration")
     if isinstance(d, int) and d > 0:
@@ -331,6 +347,8 @@ class RankedRow:
     price_eur: int
     adjusted_cost: float
     legs: List[str]
+    origin_city: Optional[str] = None
+    destination_city: Optional[str] = None
 
 
 def dedup_rows(rows: List[RankedRow]) -> List[RankedRow]:
@@ -393,6 +411,7 @@ async def search_day(
 ) -> List[RankedRow]:
     """Rank the one-way flights of one route on one day, which costs one SerpApi search."""
     resp = await serpapi_get_async(client, _search_params(api_key, origin, destination, day, defaults))
+    cities = airport_cities(resp)
 
     rows: List[RankedRow] = []
     for item in select_top_items(flights_list(resp), defaults.top_flights):
@@ -415,7 +434,10 @@ async def search_day(
             + changes * float(scoring.connection_penalty_eur)
             + airport_transfer_cost(scoring, (dep_airport, arr_airport))
         )
-        rows.append(RankedRow(dep_airport, arr_airport, dep, arr, duration, changes, price, adjusted, flight_legs(item)))
+        rows.append(RankedRow(
+            dep_airport, arr_airport, dep, arr, duration, changes, price, adjusted, flight_legs(item),
+            cities.get(dep_airport), cities.get(arr_airport),
+        ))
     return rows
 
 

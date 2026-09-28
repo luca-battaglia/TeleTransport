@@ -14,6 +14,8 @@ const train: SharedTrip = {
   changes: 1,
   price_eur: 48.5,
   legs: ['FR 9527', 'EC 17'],
+  origin_city: '',
+  destination_city: '',
 };
 
 const nightFlight: SharedTrip = {
@@ -27,6 +29,8 @@ const nightFlight: SharedTrip = {
   changes: 2,
   price_eur: 411,
   legs: [],
+  origin_city: 'Zurich',
+  destination_city: 'Rome',
 };
 
 const tokenOf = (fields: unknown[]) => btoa(JSON.stringify(fields)).replace(/=+$/, '');
@@ -41,14 +45,14 @@ describe('encodeTrip and decodeTrip', () => {
     expect(encodeTrip(train)).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
-  it('reject anything that is not a trip', () => {
+  it('reject anything that is not a trip, and links in an older format', () => {
     expect(decodeTrip('not-base64!')).toBeNull();
     expect(decodeTrip(tokenOf({ origin: 'Roma' } as never))).toBeNull();
-    expect(decodeTrip(tokenOf([2, 't', 'A', 'B', '2026-11-09T07:05', '2026-11-09T08:05', 60, 0, 10, 'it', []]))).toBeNull();
+    expect(decodeTrip(tokenOf([1, 't', 'A', 'B', '2026-11-09T07:05', '2026-11-09T08:05', 60, 0, 10, 'it', []]))).toBeNull();
   });
 
   it('reject fields a real result could not have', () => {
-    const valid = [1, 't', 'A', 'B', '2026-11-09T07:05', '2026-11-09T08:05', 60, 0, 10, 'it', ['FR 9527']];
+    const valid = [2, 't', 'A', 'B', '2026-11-09T07:05', '2026-11-09T08:05', 60, 0, 10, 'it', ['FR 9527'], '', ''];
     expect(decodeTrip(tokenOf(valid))).not.toBeNull();
     const broken = (index: number, value: unknown) => tokenOf(valid.map((v, i) => (i === index ? value : v)));
     expect(decodeTrip(broken(1, 'bus'))).toBeNull();
@@ -59,6 +63,8 @@ describe('encodeTrip and decodeTrip', () => {
     expect(decodeTrip(broken(10, 'FR 9527'))).toBeNull();
     expect(decodeTrip(broken(10, ['x'.repeat(41)]))).toBeNull();
     expect(decodeTrip(broken(10, Array(7).fill('FR 9527')))).toBeNull();
+    expect(decodeTrip(broken(11, 'x'.repeat(41)))).toBeNull();
+    expect(decodeTrip(broken(12, null))).toBeNull();
   });
 });
 
@@ -70,9 +76,14 @@ describe('tripOf', () => {
     expect(tripOf({ ...row, legs: undefined }, 'trains', 'it').legs).toEqual([]);
     expect(tripOf({ ...row, legs: Array(7).fill('RE 2159') }, 'trains', 'it').legs).toEqual([]);
   });
+
+  it('keeps the cities of a flight, or none', () => {
+    const flight = tripOf({ ...row, origin_city: 'Zurich', destination_city: null }, 'flights', 'en');
+    expect([flight.origin_city, flight.destination_city]).toEqual(['Zurich', '']);
+  });
 });
 
-type BookingCase =Parameters<typeof bookingUrl>[0] & { url: string };
+type BookingCase = Parameters<typeof bookingUrl>[0] & { url: string };
 
 // Shared with tests/test_booking_urls.py, which checks the backend against the
 // same links, so a change on either side fails a test until the other follows.
@@ -108,7 +119,7 @@ describe('shareMessage', () => {
 
   it('writes an overnight flight in English', () => {
     expect(shareMessage(nightFlight)).toBe(
-      '✈️ ZRH → FCO\n' +
+      '✈️ Zurich ZRH → Rome FCO\n' +
       '📅 Sun 27 Sept · 22:45 → 20:25 (+1)\n' +
       '⏱️ 21h 40m · 2 stops\n' +
       '💶 411.00 €'

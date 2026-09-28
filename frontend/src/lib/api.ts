@@ -17,19 +17,25 @@ export type SearchPayload = {
 export type ResultRow = {
   origin: string;
   destination: string;
+  // A flight's airports are codes; these name their cities, in English, when
+  // SerpApi does. Null for trains.
+  origin_city?: string | null;
+  destination_city?: string | null;
   dep: string;
   arr: string;
   duration_min: number;
   changes: number;
-  // The trains or flights taken, e.g. "FR 9633" or "SWISS LX 1726". Rows saved
-  // before the backend sent them have none.
+  // The trains or flights taken, e.g. "FR 9633" or "SWISS LX 1726".
   legs?: string[];
   price_eur: number;
   adjusted_cost: number;
   booking_url: string;
 };
 
-const ROW_FIELDS: Record<Exclude<keyof ResultRow, 'legs'>, 'string' | 'number'> = {
+// Rows saved before the optional fields existed have none of them.
+type OptionalField = 'origin_city' | 'destination_city' | 'legs';
+
+const ROW_FIELDS: Record<Exclude<keyof ResultRow, OptionalField>, 'string' | 'number'> = {
   origin: 'string',
   destination: 'string',
   dep: 'string',
@@ -46,8 +52,10 @@ const ROW_FIELDS: Record<Exclude<keyof ResultRow, 'legs'>, 'string' | 'number'> 
 export const isResultRow = (value: unknown): value is ResultRow => {
   if (typeof value !== 'object' || value === null) return false;
   const fields = value as Record<string, unknown>;
+  const isOptionalText = (field: unknown) => field === undefined || field === null || typeof field === 'string';
   const legsOk = fields.legs === undefined || (Array.isArray(fields.legs) && fields.legs.every(leg => typeof leg === 'string'));
-  return legsOk && Object.entries(ROW_FIELDS).every(([key, type]) => typeof fields[key] === type);
+  return legsOk && isOptionalText(fields.origin_city) && isOptionalText(fields.destination_city) &&
+    Object.entries(ROW_FIELDS).every(([key, type]) => typeof fields[key] === type);
 };
 
 export type SearchResponse = {

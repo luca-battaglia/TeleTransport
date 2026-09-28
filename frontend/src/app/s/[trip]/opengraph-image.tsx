@@ -21,7 +21,7 @@ export default async function Image({ params }: { params: Promise<{ trip: string
   const kind = view.kind.toUpperCase();
   const dayOffset = view.arrDayOffset > 0 ? `+${view.arrDayOffset}` : '';
 
-  const glyphs = [kind, view.longDay, view.depTime, view.arrTime, dayOffset, trip.origin, trip.destination,
+  const glyphs = [kind, view.longDay, view.depTime, view.arrTime, dayOffset, view.from, view.to,
     view.duration, view.changes, view.legs, view.price, words.price_note, 'TeleTransport'].join('');
   const fonts = await geistFonts(glyphs);
 
@@ -55,7 +55,7 @@ export default async function Image({ params }: { params: Promise<{ trip: string
         <div style={{ display: 'flex', flex: 1, alignItems: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', width: 380 }}>
             <div style={{ fontSize: 112, fontWeight: 700, lineHeight: 1 }}>{view.depTime}</div>
-            {place(trip.origin, 'flex-start')}
+            {place(view.from, 'flex-start')}
           </div>
 
           <div style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', padding: '0 28px' }}>
@@ -74,7 +74,7 @@ export default async function Image({ params }: { params: Promise<{ trip: string
               <div style={{ fontSize: 112, fontWeight: 700, lineHeight: 1 }}>{view.arrTime}</div>
               {dayOffset ? <div style={{ fontSize: 34, fontWeight: 700, color: COLOR.accent, marginLeft: 8 }}>{dayOffset}</div> : null}
             </div>
-            {place(trip.destination, 'flex-end')}
+            {place(view.to, 'flex-end')}
           </div>
         </div>
 

@@ -14,10 +14,12 @@ const row = {
 };
 
 describe('isResultRow', () => {
-  it('accepts the current row shape, and rows saved before legs existed', () => {
+  it('accepts the current row shape, and rows saved before its optional fields existed', () => {
     expect(isResultRow({ ...row, legs: ['SWISS LX 1726'] })).toBe(true);
     expect(isResultRow(row)).toBe(true);
     expect(isResultRow({ ...row, legs: 'SWISS LX 1726' })).toBe(false);
+    expect(isResultRow({ ...row, origin_city: 'Zurich', destination_city: null })).toBe(true);
+    expect(isResultRow({ ...row, origin_city: 42 })).toBe(false);
   });
 
   it('rejects flight rows saved before round trips were dropped', () => {

@@ -43,8 +43,8 @@ change_penalty_eur = 5.0
 
 [flights]
 currency = "EUR"
-hl = "it"                 # Google Flights interface language
-gl = "it"                 # Google Flights country
+hl = "en"                 # language of the city names on shared cards, whatever the app's language
+gl = "it"                 # Google Flights country, which sets the market and so the prices
 
 deep_search = true        # slower, closer to what the Google Flights site shows
 show_hidden = true        # include flights Google hides by default

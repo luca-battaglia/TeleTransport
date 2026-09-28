@@ -11,7 +11,13 @@ export type SharedTrip = Pick<ResultRow, 'origin' | 'destination' | 'dep' | 'arr
   mode: Mode;
   lang: Language;
   legs: string[];
+  // Empty when the row names no city, as for trains.
+  origin_city: string;
+  destination_city: string;
 };
+
+// Whatever the link would refuse is left out rather than breaking it.
+const cityOf = (city: string | null | undefined) => (city && isCity(city) ? city : '');
 
 export const tripOf = (r: ResultRow, mode: Mode, lang: Language): SharedTrip => ({
   mode,
@@ -23,13 +29,14 @@ export const tripOf = (r: ResultRow, mode: Mode, lang: Language): SharedTrip => 
   duration_min: r.duration_min,
   changes: r.changes,
   price_eur: r.price_eur,
-  // Legs the link would refuse are left out rather than breaking it.
   legs: isLegList(r.legs) ? r.legs : [],
+  origin_city: cityOf(r.origin_city),
+  destination_city: cityOf(r.destination_city),
 });
 
 // Bumped whenever the field list below changes, so older links fail cleanly
 // instead of being read with the wrong fields.
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION = 2;
 
 const toBase64Url = (text: string) => {
   const binary = Array.from(new TextEncoder().encode(text), byte => String.fromCharCode(byte)).join('');
@@ -46,11 +53,13 @@ export const encodeTrip = (trip: SharedTrip): string =>
   toBase64Url(JSON.stringify([
     FORMAT_VERSION, trip.mode === 'trains' ? 't' : 'f', trip.origin, trip.destination,
     trip.dep, trip.arr, trip.duration_min, trip.changes, trip.price_eur, trip.lang, trip.legs,
+    trip.origin_city, trip.destination_city,
   ]));
 
-// Place names are capped like the backend's Place, and legs to what a real
-// itinerary needs, so a crafted link cannot overflow the card.
+// Place names are capped like the backend's Place, and legs and cities to what
+// a real itinerary needs, so a crafted link cannot overflow the card.
 const isPlace = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 80;
+const isCity = (value: unknown): value is string => typeof value === 'string' && value.length <= 40;
 const isLegList = (value: unknown): value is string[] =>
   Array.isArray(value) && value.length <= 6 &&
   value.every(leg => typeof leg === 'string' && leg.length > 0 && leg.length <= 40);
@@ -67,15 +76,15 @@ export function decodeTrip(token: string): SharedTrip | null {
   } catch {
     return null;
   }
-  if (!Array.isArray(fields) || fields.length !== 11 || fields[0] !== FORMAT_VERSION) return null;
+  if (!Array.isArray(fields) || fields.length !== 13 || fields[0] !== FORMAT_VERSION) return null;
 
-  const [, modeCode, origin, destination, dep, arr, duration_min, changes, price_eur, lang, legs] = fields;
+  const [, modeCode, origin, destination, dep, arr, duration_min, changes, price_eur, lang, legs, origin_city, destination_city] = fields;
   const mode: Mode | null = modeCode === 't' ? 'trains' : modeCode === 'f' ? 'flights' : null;
   if (!mode || (lang !== 'it' && lang !== 'en')) return null;
   if (!isPlace(origin) || !isPlace(destination) || !isLocalTime(dep) || !isLocalTime(arr)) return null;
   if (!isWithin(duration_min, 7 * 24 * 60) || !isWithin(changes, 20) || !isWithin(price_eur, 100_000)) return null;
-  if (!isLegList(legs)) return null;
-  return { mode, lang, origin, destination, dep, arr, duration_min, changes, price_eur, legs };
+  if (!isLegList(legs) || !isCity(origin_city) || !isCity(destination_city)) return null;
+  return { mode, lang, origin, destination, dep, arr, duration_min, changes, price_eur, legs, origin_city, destination_city };
 }
 
 // Mirrors build_booking_url in core/trains.py and core/flights.py, so the link
@@ -131,6 +140,9 @@ export const shareWords = (lang: Language) => WORDS[lang];
 
 export type TripView = {
   kind: string;
+  // "Zurich ZRH" for an airport whose city is known, else the name as searched.
+  from: string;
+  to: string;
   route: string;
   longDay: string;
   shortDay: string;
@@ -156,10 +168,14 @@ export function viewOf(trip: SharedTrip): TripView {
   const day = calendarDay(trip.dep);
   const dayLabel = (options: Intl.DateTimeFormatOptions) => day.toLocaleDateString(locale, { ...options, timeZone: 'UTC' });
   const [none, one, many] = trip.mode === 'trains' ? words.changes : words.stops;
+  const from = trip.origin_city ? `${trip.origin_city} ${trip.origin}` : trip.origin;
+  const to = trip.destination_city ? `${trip.destination_city} ${trip.destination}` : trip.destination;
 
   return {
     kind: words[trip.mode],
-    route: `${trip.origin} → ${trip.destination}`,
+    from,
+    to,
+    route: `${from} → ${to}`,
     longDay: dayLabel({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
     shortDay: dayLabel({ weekday: 'short', day: 'numeric', month: 'short' }),
     depTime: trip.dep.slice(11, 16),
