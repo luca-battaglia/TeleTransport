@@ -5,9 +5,14 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { LanguageProvider } from "@/lib/i18n";
 
+const description = "Search and compare trains and flights ranked by their real cost, not just the ticket price.";
+
+// The preview image comes from app/opengraph-image.tsx, which Next adds here on its own.
 export const metadata: Metadata = {
   title: "TeleTransport",
-  description: "Search and compare trains and flights ranked by their real cost, not just the ticket price.",
+  description,
+  openGraph: { title: "TeleTransport", description, siteName: "TeleTransport", type: "website" },
+  twitter: { card: "summary_large_image", title: "TeleTransport", description },
 };
 
 export default function RootLayout({
