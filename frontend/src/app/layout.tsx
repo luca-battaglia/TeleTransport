@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { LanguageProvider } from "@/lib/i18n";
 
-const description = "Search and compare trains and flights ranked by their real cost, not just the ticket price.";
+const description = "Search trains and flights across several days and rank them by their real cost: the ticket price plus travel time, early starts, changes and transfers.";
 
 // The preview image comes from app/opengraph-image.tsx, which Next adds here on its own.
 export const metadata: Metadata = {
