@@ -36,7 +36,11 @@ LOC_SEARCH_URL = f"{BFF_BASE}/website/locations/search"
 # it runs the search and lands straight on the results. It resolves station names
 # through the same locations endpoint as LOC_SEARCH_URL, taking the first hit, so
 # the names we searched with resolve to the same stations.
-WHITE_LABEL_SEARCH_URL = "https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/"
+# The route takes an optional partner id, deliberately left out: a partner id runs
+# LeFrecce's partner setup, which writes the partner into localStorage for the
+# whole site, and for MINISITI without its callback id it reads that entry back
+# unguarded and hangs the page in a browser that never visited a partner site.
+WHITE_LABEL_SEARCH_URL = "https://www.lefrecce.it/Channels.Website.WEB/#/white-label/"
 
 LOCATIONS_TTL_S = 24 * 3600
 SOLUTIONS_PAGE_TTL_S = 30 * 60
@@ -220,6 +224,15 @@ async def api_request_json(
     raise last_err or RuntimeError(f"{method} {url} failed")
 
 
+async def launch_browser(pw: Any) -> Any:
+    """Headless Chrome when it is installed, else the Chromium bundled with Playwright."""
+    try:
+        return await pw.chromium.launch(headless=True, channel="chrome")
+    except Exception:
+        log.debug("Chrome not found, using the bundled Chromium")
+        return await pw.chromium.launch(headless=True)
+
+
 class BrowserSession:
     """A headless browser started on first use, so fully cached searches never launch one."""
 
@@ -242,11 +255,7 @@ class BrowserSession:
 
         log.debug("starting headless browser")
         self._pw = await async_playwright().start()
-        try:
-            self._browser = await self._pw.chromium.launch(headless=True, channel="chrome")
-        except Exception:
-            log.debug("Chrome not found, using the bundled Chromium")
-            self._browser = await self._pw.chromium.launch(headless=True)
+        self._browser = await launch_browser(self._pw)
 
         context = await self._browser.new_context(
             locale="it-IT",

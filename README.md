@@ -109,6 +109,8 @@ cd frontend && npm run lint && npm test && npm run build
 
 GitHub Actions runs them on every push, and the backend is only deployed when they pass.
 
+None of them contacts Trenitalia. When its booking links stop opening their results, `TELETRANSPORT_LIVE_TESTS=1 pytest tests/test_live_booking_link.py` opens a real one in a headless browser and reports where it got stuck, with the page's own errors.
+
 ## Privacy
 
 Your SerpApi key stays in your browser and reaches the server only with your flight searches. The server does not store or log it. Rate limits count searches per visitor through hashed IP addresses that expire within two days.

@@ -3,7 +3,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ExternalLink } from 'lucide-react';
-import { arrivalLabel, bookingUrl, changesLabel, decodeTrip, shareWords, viewOf } from '@/lib/share';
+import { bookingUrl } from '@/lib/booking';
+import { arrivalLabel, changesLabel, decodeTrip, shareWords, viewOf } from '@/lib/share';
 
 // Where a shared link lands. WhatsApp and Telegram only read its metadata and
 // the card next to it; a person who opens it gets the card and the operator's

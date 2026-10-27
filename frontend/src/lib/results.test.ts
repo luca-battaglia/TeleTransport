@@ -11,7 +11,6 @@ const row = (dep: string, adjusted_cost: number, duration_min = 120): ResultRow 
   changes: 0,
   price_eur: 30,
   adjusted_cost,
-  booking_url: 'https://www.lefrecce.it/',
 });
 
 const results = [

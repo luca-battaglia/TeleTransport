@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ResultRow } from './api';
-import { bookingUrl, decodeTrip, encodeTrip, shareMessage, tripOf, viewOf, type SharedTrip } from './share';
+import { decodeTrip, encodeTrip, shareMessage, tripOf, viewOf, type SharedTrip } from './share';
 
 const train: SharedTrip = {
   mode: 'trains',
@@ -69,7 +68,7 @@ describe('encodeTrip and decodeTrip', () => {
 });
 
 describe('tripOf', () => {
-  const row: ResultRow = { ...train, adjusted_cost: 180, booking_url: 'https://www.lefrecce.it/' };
+  const row: ResultRow = { ...train, adjusted_cost: 180 };
 
   it('keeps legs a link can carry and leaves out the rest', () => {
     expect(tripOf(row, 'trains', 'it').legs).toEqual(['FR 9527', 'EC 17']);
@@ -80,18 +79,6 @@ describe('tripOf', () => {
   it('keeps the cities of a flight, or none', () => {
     const flight = tripOf({ ...row, origin_city: 'Zurich', destination_city: null }, 'flights', 'en');
     expect([flight.origin_city, flight.destination_city]).toEqual(['Zurich', '']);
-  });
-});
-
-type BookingCase = Parameters<typeof bookingUrl>[0] & { url: string };
-
-// Shared with tests/test_booking_urls.py, which checks the backend against the
-// same links, so a change on either side fails a test until the other follows.
-const bookingCases: BookingCase[] = JSON.parse(readFileSync(new URL('../../../tests/booking_urls.json', import.meta.url), 'utf-8'));
-
-describe('bookingUrl', () => {
-  it.each(bookingCases)('builds what the backend builds for $origin → $destination', ({ url, ...trip }) => {
-    expect(bookingUrl(trip)).toBe(url);
   });
 });
 

@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Share2, X } from 'lucide-react';
 import type { ResultRow } from '@/lib/api';
+import { bookingUrl } from '@/lib/booking';
 import { RESULT_COLUMNS, localeOf, rowCells } from '@/lib/format';
 import { useLanguage } from '@/lib/i18n';
 import { dayOf, type IndexedRow, type SortOrder } from '@/lib/results';
@@ -56,7 +57,7 @@ export default function ResultsTable({ rows, mode, sortOrder, onExclude, onShare
                       two destinations are Trenitalia and Google.
                     */}
                     <a
-                      href={r.booking_url}
+                      href={bookingUrl({ ...r, mode, lang: language })}
                       target={train ? 'trenitalia' : 'googleflights'}
                       className="route-link"
                       title={train ? t("open_row_trenitalia") : t("open_row_flights")}

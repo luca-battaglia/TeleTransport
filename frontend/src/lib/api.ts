@@ -29,7 +29,8 @@ export type ResultRow = {
   legs?: string[];
   price_eur: number;
   adjusted_cost: number;
-  booking_url: string;
+  // The backend also sends booking_url, which the page leaves aside for the
+  // link it builds itself (see bookingUrl in booking.ts).
 };
 
 // Rows saved before the optional fields existed have none of them.
@@ -44,7 +45,6 @@ const ROW_FIELDS: Record<Exclude<keyof ResultRow, OptionalField>, 'string' | 'nu
   changes: 'number',
   price_eur: 'number',
   adjusted_cost: 'number',
-  booking_url: 'string',
 };
 
 // Rows restored from browser storage may predate the current shape: flight rows

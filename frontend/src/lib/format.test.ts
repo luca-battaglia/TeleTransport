@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ResultRow } from './api';
+import { bookingUrl } from './booking';
 import { formatDateTime, formatDuration, formatEuro, markdownRowCells, markdownTable } from './format';
 
 const train: ResultRow = {
@@ -11,7 +12,6 @@ const train: ResultRow = {
   changes: 0,
   price_eur: 49.9,
   adjusted_cost: 1234.5,
-  booking_url: 'https://www.lefrecce.it/',
 };
 
 describe('formatDateTime', () => {
@@ -41,10 +41,11 @@ describe('formatEuro', () => {
 describe('markdownTable', () => {
   it('writes the same cells as the table, with the route linking to the operator', () => {
     const headers = ['Route', 'Departure', 'Arrival', 'Duration', 'Price', 'Adj Cost'];
-    expect(markdownTable(headers, [markdownRowCells(train, true, 'en-GB')])).toBe(
+    const link = bookingUrl({ ...train, mode: 'trains', lang: 'en' });
+    expect(markdownTable(headers, [markdownRowCells(train, 'trains', 'en')])).toBe(
       '| Route | Departure | Arrival | Duration | Price | Adj Cost |\n' +
       '|---|---|---|---|---|---|\n' +
-      '| [Milano Centrale → Roma Termini](https://www.lefrecce.it/) | 01/10/2026, 07:10 | 01/10/2026, 10:15 | 3h 5m | 49.90 € | 1,234.50 € |\n'
+      `| [Milano Centrale → Roma Termini](${link}) | 01/10/2026, 07:10 | 01/10/2026, 10:15 | 3h 5m | 49.90 € | 1,234.50 € |\n`
     );
   });
 });

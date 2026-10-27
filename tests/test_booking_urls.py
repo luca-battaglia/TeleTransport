@@ -6,7 +6,7 @@ import pytest
 
 from core import flights, trains
 
-# The share page rebuilds these links in TypeScript (frontend/src/lib/share.ts),
+# The web app rebuilds these links in TypeScript (frontend/src/lib/booking.ts),
 # and its tests read the same file, so a change on either side fails a test
 # until the other follows.
 CASES = json.loads((Path(__file__).parent / "booking_urls.json").read_text(encoding="utf-8"))

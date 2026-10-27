@@ -1,5 +1,7 @@
 import type { ResultRow } from './api';
+import { bookingUrl } from './booking';
 import type { Language } from './i18n';
+import type { Mode } from './settings';
 
 export const localeOf = (language: Language) => (language === 'it' ? 'it-IT' : 'en-GB');
 
@@ -31,9 +33,9 @@ export const rowCells = (r: ResultRow, train: boolean, locale: string): string[]
 
 // The route links to the operator's page, as it does in the table, so the copy
 // stays clickable once pasted into a Markdown editor such as Obsidian.
-export const markdownRowCells = (r: ResultRow, train: boolean, locale: string): string[] => {
-  const [route, ...rest] = rowCells(r, train, locale);
-  return [`[${route}](${r.booking_url})`, ...rest];
+export const markdownRowCells = (r: ResultRow, mode: Mode, language: Language): string[] => {
+  const [route, ...rest] = rowCells(r, mode === 'trains', localeOf(language));
+  return [`[${route}](${bookingUrl({ ...r, mode, lang: language })})`, ...rest];
 };
 
 export const markdownTable = (headers: string[], rows: string[][]) => {

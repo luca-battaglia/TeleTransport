@@ -87,30 +87,6 @@ export function decodeTrip(token: string): SharedTrip | null {
   return { mode, lang, origin, destination, dep, arr, duration_min, changes, price_eur, legs, origin_city, destination_city };
 }
 
-// Mirrors build_booking_url in core/trains.py and core/flights.py, so the link
-// does not have to carry the operator's long URL. tests/booking_urls.json holds
-// the expected links, and both test suites check their side against it.
-export function bookingUrl(trip: Pick<SharedTrip, 'mode' | 'origin' | 'destination' | 'dep' | 'lang'>): string {
-  const day = trip.dep.slice(0, 10);
-  if (trip.mode === 'flights') {
-    const q = `Flights to ${trip.destination} from ${trip.origin} on ${day} one-way`;
-    return `https://www.google.com/travel/flights?${new URLSearchParams({ q, hl: trip.lang })}`;
-  }
-  const [year, month, date] = day.split('-');
-  const params = new URLSearchParams({
-    isRoundTrip: 'false',
-    departureStation: trip.origin,
-    arrivalStation: trip.destination,
-    departureDate: `${date}-${month}-${year}`,
-    departureTime: `${trip.dep.slice(11, 13)}:00`,
-    noOfAdults: '1',
-    noOfChildren: '0',
-    searchSolutions: 'true',
-    lang: trip.lang,
-  });
-  return `https://www.lefrecce.it/Channels.Website.WEB/#/white-label/MINISITI/?${params}`;
-}
-
 // The share page and its image render on the server, where the app's dictionary
 // (a client module) cannot be read, so the few words they need live here.
 const WORDS = {

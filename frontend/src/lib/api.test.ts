@@ -10,7 +10,6 @@ const row = {
   changes: 0,
   price_eur: 70,
   adjusted_cost: 100,
-  booking_url: 'https://www.google.com/travel/flights?q=x',
 };
 
 describe('isResultRow', () => {

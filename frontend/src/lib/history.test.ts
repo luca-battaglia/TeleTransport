@@ -11,7 +11,6 @@ const row: ResultRow = {
   changes: 0,
   price_eur: 89,
   adjusted_cost: 150,
-  booking_url: 'https://www.google.com/travel/flights',
 };
 
 const entry = (timestamp: number, results: unknown[] = [row]) =>
