@@ -100,6 +100,16 @@ class Route:
 
 
 @dataclass(frozen=True)
+class Station:
+    id: int
+    # LeFrecce's own name for the station, which the results carry instead of the
+    # name as typed. A booking link hands the name back to LeFrecce, which takes
+    # its first search hit: for "Zurigo" that is Zuerich (city), not the Zuerich Hb
+    # picked here, while its own name comes back as the station itself.
+    name: str
+
+
+@dataclass(frozen=True)
 class SearchTask:
     route: Route
     d1: date
@@ -283,14 +293,14 @@ def _normalize_station_key(s: str) -> str:
     return " ".join((s or "").strip().split()).casefold()
 
 
-def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
+def _pick_location(name_query: str, locations: List[Dict[str, Any]]) -> Dict[str, Any]:
     nq = (name_query or "").strip().casefold()
 
     for loc in locations:
         n = str(loc.get("name", "")).casefold()
         dn = str(loc.get("displayName", "")).casefold()
         if n == nq or dn == nq:
-            return int(loc["id"])
+            return loc
 
     # "Zurigo" alone would otherwise resolve to whichever Zurich stop comes first.
     if any(k in nq for k in ("zur", "zür", "zuer")):
@@ -298,7 +308,7 @@ def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
             n = str(loc.get("name", "")).casefold()
             dn = str(loc.get("displayName", "")).casefold()
             if any(k in n or k in dn for k in ("hb", "hauptbahnhof", "centrale")):
-                return int(loc["id"])
+                return loc
 
     # Turin has a meta-station covering all of its stations; prefer it.
     if "torino" in nq:
@@ -306,11 +316,16 @@ def pick_location_id(name_query: str, locations: List[Dict[str, Any]]) -> int:
             n = str(loc.get("name", "")).casefold()
             dn = str(loc.get("displayName", "")).casefold()
             if "tutte" in n or "tutte" in dn or "all" in n:
-                return int(loc["id"])
+                return loc
 
     if not locations:
         raise StationNotFoundError(name_query)
-    return int(locations[0]["id"])
+    return locations[0]
+
+
+def pick_station(name_query: str, locations: List[Dict[str, Any]]) -> Station:
+    loc = _pick_location(name_query, locations)
+    return Station(id=int(loc["id"]), name=str(loc.get("name") or "").strip() or name_query)
 
 
 def build_departure_iso(d: date, hh: int = 0, mm: int = 0) -> str:
@@ -439,12 +454,12 @@ async def search_ranked_solutions(
         )
         return data, False, cache_key
 
-    station_ids: Dict[str, int] = {}
+    stations: Dict[str, Station] = {}
 
-    async def resolve_id(station_name: str) -> int:
+    async def resolve(station_name: str) -> Station:
         key = _normalize_station_key(station_name)
-        if key in station_ids:
-            return station_ids[key]
+        if key in stations:
+            return stations[key]
 
         url = f"{LOC_SEARCH_URL}?name={quote_plus(station_name)}&limit=50"
         cache_key = generate_cache_key("trains_loc", {"url": url})
@@ -456,15 +471,15 @@ async def search_ranked_solutions(
                 locs = []
             store(cache_key, locs, False, LOCATIONS_TTL_S)
 
-        station_ids[key] = pick_location_id(station_name, locs)
-        log.debug("station %s -> %s", station_name, station_ids[key])
-        return station_ids[key]
+        stations[key] = pick_station(station_name, locs)
+        log.debug("station %s -> %s", station_name, stations[key])
+        return stations[key]
 
     sem = asyncio.Semaphore(MAX_CONCURRENT_DAYS)
     # A dirty or changed endpoint could keep returning pages forever; this bounds it.
     scan_cap = max(300, defaults.max_per_day * max(1, defaults.scan_cap_mult))
 
-    async def fetch_day(task: SearchTask, dep_id: int, arr_id: int, day: date) -> List[RankedSolution]:
+    async def fetch_day(task: SearchTask, dep_station: Station, arr_station: Station, day: date) -> List[RankedSolution]:
         async with sem:
             found: List[RankedSolution] = []
             seen_keys: set[str] = set()
@@ -474,8 +489,8 @@ async def search_ranked_solutions(
 
             while len(found) < defaults.max_per_day and scanned < scan_cap and not passed_day:
                 payload = {
-                    "departureLocationId": dep_id,
-                    "arrivalLocationId": arr_id,
+                    "departureLocationId": dep_station.id,
+                    "arrivalLocationId": arr_station.id,
                     "departureTime": build_departure_iso(day),
                     "adults": 1,
                     "children": 0,
@@ -534,8 +549,8 @@ async def search_ranked_solutions(
                         continue
 
                     found.append(RankedSolution(
-                        origin=task.route.from_name,
-                        destination=task.route.to_name,
+                        origin=dep_station.name,
+                        destination=arr_station.name,
                         dep=dep_local,
                         arr=arr_local,
                         duration=duration,
@@ -576,10 +591,10 @@ async def search_ranked_solutions(
     try:
         day_jobs = []
         for task in tasks:
-            dep_id = await resolve_id(task.route.from_name)
-            arr_id = await resolve_id(task.route.to_name)
+            dep_station = await resolve(task.route.from_name)
+            arr_station = await resolve(task.route.to_name)
             log.debug("searching %s: %s -> %s", task.route.label, task.d1, task.d2)
-            day_jobs.extend(fetch_day(task, dep_id, arr_id, day) for day in daterange(task.d1, task.d2))
+            day_jobs.extend(fetch_day(task, dep_station, arr_station, day) for day in daterange(task.d1, task.d2))
 
         ranked = [sol for day_result in await asyncio.gather(*day_jobs) for sol in day_result]
     finally:
