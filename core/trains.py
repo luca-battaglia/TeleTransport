@@ -12,6 +12,8 @@ import asyncio
 import json
 import logging
 import random
+import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -293,34 +295,59 @@ def _normalize_station_key(s: str) -> str:
     return " ".join((s or "").strip().split()).casefold()
 
 
+_UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
+
+
+def fold_station_name(name: str) -> str:
+    """The name in plain ASCII, the only spelling LeFrecce finds: "Zürich HB" as "Zuerich HB", "Genève" as "Geneve"."""
+    decomposed = unicodedata.normalize("NFKD", (name or "").translate(_UMLAUTS))
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def location_search_url(name: str, limit: int) -> str:
+    return f"{LOC_SEARCH_URL}?name={quote_plus(fold_station_name(name))}&limit={limit}"
+
+
+def _station_key(name: Any) -> str:
+    return _normalize_station_key(fold_station_name(str(name or "")))
+
+
 def _pick_location(name_query: str, locations: List[Dict[str, Any]]) -> Dict[str, Any]:
-    nq = (name_query or "").strip().casefold()
+    nq = _station_key(name_query)
 
     for loc in locations:
-        n = str(loc.get("name", "")).casefold()
-        dn = str(loc.get("displayName", "")).casefold()
-        if n == nq or dn == nq:
+        if nq in (_station_key(loc.get("name")), _station_key(loc.get("displayName"))):
             return loc
 
     # "Zurigo" alone would otherwise resolve to whichever Zurich stop comes first.
-    if any(k in nq for k in ("zur", "zür", "zuer")):
+    if any(k in nq for k in ("zur", "zuer")):
         for loc in locations:
             n = str(loc.get("name", "")).casefold()
             dn = str(loc.get("displayName", "")).casefold()
             if any(k in n or k in dn for k in ("hb", "hauptbahnhof", "centrale")):
                 return loc
 
-    # Turin has a meta-station covering all of its stations; prefer it.
-    if "torino" in nq:
-        for loc in locations:
-            n = str(loc.get("name", "")).casefold()
-            dn = str(loc.get("displayName", "")).casefold()
-            if "tutte" in n or "tutte" in dn or "all" in n:
-                return loc
-
     if not locations:
         raise StationNotFoundError(name_query)
-    return locations[0]
+
+    starts_with_query = re.compile(rf"{re.escape(nq)}(?!\w)")
+
+    def rank(loc: Dict[str, Any]) -> int:
+        name = str(loc.get("name", ""))
+        key = _station_key(name)
+        # LeFrecce sorts its names in ASCII order, which puts the upper-case ones
+        # (buses, airport shuttles, other railways) before the stations of a city:
+        # "Verona" lists VERONA AEROPORTO first and Verona Porta Nuova seventh.
+        if starts_with_query.match(key) and name != name.upper():
+            return 0
+        # A name without the query in it was found through one of LeFrecce's
+        # aliases, a better guess than a longer word that merely starts with the
+        # query: "Berna" lists Bernalda first and Bern sixteenth.
+        if nq not in key:
+            return 1
+        return 2
+
+    return min(locations, key=rank)
 
 
 def pick_station(name_query: str, locations: List[Dict[str, Any]]) -> Station:
@@ -461,7 +488,7 @@ async def search_ranked_solutions(
         if key in stations:
             return stations[key]
 
-        url = f"{LOC_SEARCH_URL}?name={quote_plus(station_name)}&limit=50"
+        url = location_search_url(station_name, 50)
         cache_key = generate_cache_key("trains_loc", {"url": url})
         locs = None if no_cache else app_cache.get(cache_key)
         if locs is None:
@@ -469,7 +496,10 @@ async def search_ranked_solutions(
             locs = await api_request_json(ctx, "GET", url, timeout_ms=defaults.api_timeout_ms, retries=defaults.api_retries)
             if not isinstance(locs, list):
                 locs = []
-            store(cache_key, locs, False, LOCATIONS_TTL_S)
+            # LeFrecce at times finds nothing, for minutes on end, for a name it
+            # knows ("Zurich"), so only a hit is kept for the day.
+            if locs:
+                store(cache_key, locs, False, LOCATIONS_TTL_S)
 
         stations[key] = pick_station(station_name, locs)
         log.debug("station %s -> %s", station_name, stations[key])

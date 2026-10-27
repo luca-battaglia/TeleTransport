@@ -11,7 +11,6 @@ import asyncio
 import os
 from datetime import date, datetime, time, timedelta
 from typing import List
-from urllib.parse import quote_plus
 
 import pytest
 
@@ -69,7 +68,7 @@ async def station_round_trip(name_as_typed: str) -> tuple[trains.Station, int]:
     ctx = await session.request_context()
 
     async def search(name: str, limit: int) -> list:
-        return await trains.api_request_json(ctx, "GET", f"{trains.LOC_SEARCH_URL}?name={quote_plus(name)}&limit={limit}")
+        return await trains.api_request_json(ctx, "GET", trains.location_search_url(name, limit))
 
     try:
         station = trains.pick_station(name_as_typed, await search(name_as_typed, 50))
@@ -80,7 +79,9 @@ async def station_round_trip(name_as_typed: str) -> tuple[trains.Station, int]:
         await session.close()
 
 
-@pytest.mark.parametrize("name_as_typed", ["Zurigo", "Zurigo HB", "Torino", "Milano", "Firenze", "Lecce"])
+@pytest.mark.parametrize(
+    "name_as_typed", ["Zurigo", "Zurigo HB", "Zürich HB", "Torino", "Milano", "Firenze", "Lecce", "Verona", "Berna"]
+)
 def test_a_booking_link_opens_the_station_that_was_searched(name_as_typed: str) -> None:
     station, reached = asyncio.run(station_round_trip(name_as_typed))
 

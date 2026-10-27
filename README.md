@@ -96,7 +96,7 @@ python -m cli flights --from Zurich --to Rome --to Naples --dep 2026-10-03 --sor
 | Milano Centrale -> Roma Termini | 2026-10-03 17:35 | 2026-10-03 20:45 | 3h10       |         0 |         62.90 |            126.23 |
 ```
 
-Dates can be `2026-10-03`, `3/10`, `3-5/10` or `30/9..2/10`, and `--dep` can be repeated. Station names are in Italian, because that is what Trenitalia understands. Results name each station the way Trenitalia does, so `Zurigo` comes back as `Zuerich Hb`, the station that was actually searched. `python -m cli trains --help` lists every option.
+Dates can be `2026-10-03`, `3/10`, `3-5/10` or `30/9..2/10`, and `--dep` can be repeated. Station names are in Italian, because that is what Trenitalia understands, and accents and umlauts are fine: `Zürich HB` is looked up as `Zuerich HB`. Results name each station the way Trenitalia does, so `Zurigo` comes back as `Zuerich Hb`, the station that was actually searched. `python -m cli trains --help` lists every option.
 
 ## Tests
 
